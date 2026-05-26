@@ -10,7 +10,8 @@ export function createRun(repoRoot, options) {
   const agentId = options.agentId;
   const workflow = loadWorkflow(repoRoot, agentId);
   const runId = options.runId ?? defaultRunId();
-  const runRoot = resolve(options.runRoot ?? join(repoRoot, '.agent-runs', agentId));
+  const projectRoot = resolve(options.project);
+  const runRoot = resolve(options.runRoot ?? join(projectRoot, '.agent-runs', agentId));
   const runDir = join(runRoot, runId);
   const firstPhase = workflow.phases[0];
 
@@ -20,7 +21,7 @@ export function createRun(repoRoot, options) {
     schema_version: 1,
     run_id: runId,
     agent_id: agentId,
-    project_root: resolve(options.project),
+    project_root: projectRoot,
     repo_root: resolve(repoRoot),
     run_dir: runDir,
     status: 'running',

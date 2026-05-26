@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
@@ -89,6 +89,48 @@ function resolveDefaultCommandPrefix() {
 
 const defaultCommandPrefix = resolveDefaultCommandPrefix();
 
+function portablePath(path) {
+  return path.replace(/\\/g, '/');
+}
+
+function pathRelativeToCwd(path) {
+  const target = resolve(path);
+  const cwd = resolve(process.cwd());
+  const relativePath = relative(cwd, target);
+
+  if (relativePath === '') {
+    return '.';
+  }
+
+  return portablePath(isAbsolute(relativePath) ? target : relativePath);
+}
+
+function usesPosixShell() {
+  const shell = (process.env.SHELL ?? '').toLowerCase();
+  return Boolean(process.env.MSYSTEM) || /(^|\/)(ba|z|fi)?sh$/.test(shell);
+}
+
+function posixShellArg(text) {
+  return `'${text.replace(/'/g, "'\\''")}'`;
+}
+
+function powershellArg(text) {
+  return `'${text.replace(/'/g, "''")}'`;
+}
+
+function shellArg(value) {
+  const text = String(value);
+  if (/^[A-Za-z0-9_./:@%+-]+$/.test(text)) {
+    return text;
+  }
+
+  return usesPosixShell() ? posixShellArg(text) : powershellArg(text);
+}
+
+function shellPathArg(path) {
+  return shellArg(pathRelativeToCwd(path));
+}
+
 function parseOptions(args) {
   const options = {};
   const positional = [];
@@ -144,10 +186,10 @@ function printInstallResult(result, commandPrefix = defaultCommandPrefix) {
   console.log(`Installed agent: ${result.agent.id}`);
   console.log(`Project root: ${result.projectRoot}`);
   console.log(`Config: ${result.configPath}`);
-  console.log(`Gitignore: ${result.gitignoreStatus} .agent-runs/`);
+  console.log(`Gitignore: ${result.gitignoreStatus} .agent-runs/, .alloycat/`);
   console.log('');
   console.log('Next:');
-  console.log(`  ${commandPrefix} init ${result.agent.id} --project ${result.projectRoot} --run-root ${result.runRoot}`);
+  console.log(`  ${commandPrefix} init ${result.agent.id} --project ${shellPathArg(result.projectRoot)}`);
   console.log(`  ${commandPrefix} next --run <run-dir>`);
 }
 
@@ -213,6 +255,9 @@ function commandInit(agentId, options) {
   });
   console.log(`Initialized ${run.state.run_id}`);
   console.log(`Run directory: ${run.runDir}`);
+  console.log('');
+  console.log('Next:');
+  console.log(`  ${defaultCommandPrefix} next --run ${shellPathArg(run.runDir)}`);
 }
 
 function commandStatus(options) {

@@ -90,6 +90,7 @@ test('linked install writes project config, run root, readme, and gitignore entr
     assert.equal(existsSync(readmePath), true);
     assert.equal(existsSync(runRoot), true);
     assert.match(readFileSync(gitignorePath, 'utf8'), /^\.agent-runs\/$/m);
+    assert.match(readFileSync(gitignorePath, 'utf8'), /^\.alloycat\/$/m);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -98,7 +99,7 @@ test('linked install writes project config, run root, readme, and gitignore entr
 test('linked install does not duplicate an existing agent runs gitignore entry', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-install-idempotent-'));
   try {
-    writeFileSync(join(tempRoot, '.gitignore'), 'node_modules/\n.agent-runs/\ndist/\n');
+    writeFileSync(join(tempRoot, '.gitignore'), 'node_modules/\n.agent-runs\n/.alloycat/\ndist/\n');
 
     const first = installAgent(repoRoot, {
       agentId: 'interaction-audit',
@@ -112,7 +113,8 @@ test('linked install does not duplicate an existing agent runs gitignore entry',
 
     assert.equal(first.gitignoreStatus, 'already-present');
     assert.equal(second.gitignoreStatus, 'already-present');
-    assert.equal(gitignore.match(/^\.agent-runs\/$/gm).length, 1);
+    assert.equal(gitignore.match(/^\.agent-runs\/?$/gm).length, 1);
+    assert.equal(gitignore.match(/^\/?\.alloycat\/?$/gm).length, 1);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -152,6 +154,23 @@ test('linked install repeated from an empty project keeps one agent runs gitigno
 
     assert.equal(second.gitignoreStatus, 'already-present');
     assert.equal(gitignore.match(/^\.agent-runs\/$/gm).length, 1);
+    assert.equal(gitignore.match(/^\.alloycat\/$/gm).length, 1);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('create run defaults run root to the target project agent runs folder', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-run-default-root-'));
+  try {
+    const run = createRun(repoRoot, {
+      agentId: 'interaction-audit',
+      project: tempRoot,
+      runId: 'default-root-run'
+    });
+
+    assert.equal(run.runDir, join(tempRoot, '.agent-runs', 'interaction-audit', 'default-root-run'));
+    assert.equal(loadRunState(run.runDir).project_root, tempRoot);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }

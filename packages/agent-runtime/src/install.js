@@ -44,31 +44,39 @@ function writeInstallReadme(projectRoot) {
     '',
     'This project has local Alloy Agent Catalog install configuration.',
     '',
-    'Run artifacts are written under `.agent-runs/` and are ignored by git.',
+    'Local install metadata is written under `.alloycat/` and run artifacts are written under `.agent-runs/`.',
+    'Both paths are ignored by git for linked installs.',
     ''
   ].join('\n'));
 }
 
 function ensureGitignoreEntry(projectRoot) {
   const gitignorePath = join(projectRoot, '.gitignore');
-  const entry = '.agent-runs/';
+  const entries = ['.agent-runs/', '.alloycat/'];
+  const requiredEntries = entries.map((entry) => ({
+    entry,
+    key: entry.replace(/^\/+/, '').replace(/\/+$/, '')
+  }));
 
   if (!existsSync(gitignorePath)) {
-    writeFileSync(gitignorePath, `${entry}\n`);
+    writeFileSync(gitignorePath, `${entries.join('\n')}\n`);
     return 'added';
   }
 
   const current = readFileSync(gitignorePath, 'utf8');
-  const hasEntry = current
+  const existingEntries = new Set(current
     .split(/\r?\n/)
-    .some((line) => line.trim() === entry);
+    .map((line) => line.trim().replace(/^\/+/, '').replace(/\/+$/, '')));
+  const missingEntries = requiredEntries
+    .filter(({ key }) => !existingEntries.has(key))
+    .map(({ entry }) => entry);
 
-  if (hasEntry) {
+  if (missingEntries.length === 0) {
     return 'already-present';
   }
 
   const prefix = current === '' || current.endsWith('\n') ? current : `${current}\n`;
-  writeFileSync(gitignorePath, `${prefix}${entry}\n`);
+  writeFileSync(gitignorePath, `${prefix}${missingEntries.join('\n')}\n`);
   return 'added';
 }
 
