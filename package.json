@@ -5,6 +5,8 @@
   "type": "module",
   "description": "Reusable Alloy agent packages and workflow runtime tools.",
   "scripts": {
+    "pack:alloycat": "node scripts/pack-alloycat.mjs",
+    "smoke:alloycat-pack": "node --test tests/alloycat-package.test.mjs",
     "test": "node --test tests/*.test.mjs",
     "validate": "node scripts/validate-catalog.mjs"
   },
