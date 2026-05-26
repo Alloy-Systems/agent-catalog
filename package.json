@@ -6,6 +6,9 @@
   "description": "Reusable Alloy agent packages and workflow runtime tools.",
   "scripts": {
     "pack:alloycat": "node scripts/pack-alloycat.mjs",
+    "release:major": "node scripts/release-alloycat.mjs major",
+    "release:minor": "node scripts/release-alloycat.mjs minor",
+    "release:patch": "node scripts/release-alloycat.mjs patch",
     "smoke:alloycat-pack": "node --test tests/alloycat-package.test.mjs",
     "test": "node --test tests/*.test.mjs",
     "validate": "node scripts/validate-catalog.mjs"
