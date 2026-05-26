@@ -60,6 +60,64 @@ test('resolves project root by walking up to package.json when no git directory 
   }
 });
 
+test('linked install writes project config, run root, readme, and gitignore entry', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-install-runtime-'));
+  try {
+    const result = installAgent(repoRoot, {
+      agentId: 'interaction-audit',
+      project: tempRoot
+    });
+
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const readmePath = join(tempRoot, '.alloycat', 'README.md');
+    const runRoot = join(tempRoot, '.agent-runs', 'interaction-audit');
+    const gitignorePath = join(tempRoot, '.gitignore');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+
+    assert.equal(result.agent.id, 'interaction-audit');
+    assert.equal(result.projectRoot, tempRoot);
+    assert.equal(result.configPath, configPath);
+    assert.equal(result.runRoot, runRoot);
+    assert.equal(result.gitignoreStatus, 'added');
+    assert.equal(result.mode, 'linked');
+    assert.equal(config.schema_version, 1);
+    assert.equal(config.agent_id, 'interaction-audit');
+    assert.equal(config.mode, 'linked');
+    assert.equal(config.catalog_root, repoRoot);
+    assert.equal(config.agent_path, join(repoRoot, 'agents', 'interaction-audit'));
+    assert.equal(config.run_root, runRoot);
+    assert.match(config.installed_at, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(existsSync(readmePath), true);
+    assert.equal(existsSync(runRoot), true);
+    assert.match(readFileSync(gitignorePath, 'utf8'), /^\.agent-runs\/$/m);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('linked install does not duplicate an existing agent runs gitignore entry', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-install-idempotent-'));
+  try {
+    writeFileSync(join(tempRoot, '.gitignore'), 'node_modules/\n.agent-runs/\ndist/\n');
+
+    const first = installAgent(repoRoot, {
+      agentId: 'interaction-audit',
+      project: tempRoot
+    });
+    const second = installAgent(repoRoot, {
+      agentId: 'interaction-audit',
+      project: tempRoot
+    });
+    const gitignore = readFileSync(join(tempRoot, '.gitignore'), 'utf8');
+
+    assert.equal(first.gitignoreStatus, 'already-present');
+    assert.equal(second.gitignoreStatus, 'already-present');
+    assert.equal(gitignore.match(/^\.agent-runs\/$/gm).length, 1);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('creates run state for the first phase', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-run-'));
   try {
