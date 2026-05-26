@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -73,6 +73,54 @@ test('install without an agent id exits nonzero when no selection is provided', 
 
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /Agent id is required when running non-interactively/);
+    assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('install without project option resolves the project root from nested cwd', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-cwd-'));
+  try {
+    mkdirSync(join(tempRoot, '.git'));
+    const nested = join(tempRoot, 'src', 'features');
+    mkdirSync(nested, { recursive: true });
+
+    const result = runCli(['install', 'interaction-audit'], { cwd: nested });
+    assert.equal(result.status, 0, result.stderr);
+
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+
+    assert.equal(result.stdout.includes(`Project root: ${tempRoot}`), true);
+    assert.equal(config.agent_id, 'interaction-audit');
+    assert.equal(config.run_root, join(tempRoot, '.agent-runs', 'interaction-audit'));
+    assert.equal(existsSync(join(nested, '.alloycat')), false);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('install without an agent id rejects invalid numbered selection', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-invalid-selection-'));
+  try {
+    const result = runCli(['install', '--project', tempRoot], { input: '99\n' });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Invalid agent selection: 99/);
+    assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('install rejects unsupported install modes before writing project config', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-mode-'));
+  try {
+    const result = runCli(['install', 'interaction-audit', '--project', tempRoot, '--mode', 'vendored']);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Unsupported install mode: vendored/);
     assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
