@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -9,7 +9,9 @@ import {
   loadCatalog,
   loadRunState,
   loadWorkflow,
-  renderNextPrompt
+  completeRun,
+  renderNextPrompt,
+  saveRunState
 } from '../packages/agent-runtime/src/index.js';
 
 const repoRoot = resolve(import.meta.dirname, '..');
@@ -63,6 +65,120 @@ test('renders next phase prompt with exact artifact paths', () => {
     assert.match(prompt, /Phase: resolve-project-root/);
     assert.match(prompt, /Output artifacts/);
     assert.match(prompt, /00-project-root\.json/);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('complete requires current phase output artifacts before advancing', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-complete-missing-'));
+  try {
+    const run = createRun(repoRoot, {
+      agentId: 'interaction-audit',
+      project: repoRoot,
+      runRoot: tempRoot,
+      runId: 'missing-output-run'
+    });
+
+    assert.throws(
+      () => completeRun(repoRoot, run.runDir),
+      /Missing output artifacts for phase resolve-project-root: .*00-project-root\.json/
+    );
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('complete advances to the next workflow phase after outputs exist', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-complete-next-'));
+  try {
+    const run = createRun(repoRoot, {
+      agentId: 'interaction-audit',
+      project: repoRoot,
+      runRoot: tempRoot,
+      runId: 'next-phase-run'
+    });
+    writeFileSync(join(run.runDir, '00-project-root.json'), '{}\n');
+
+    const result = completeRun(repoRoot, run.runDir);
+    const state = loadRunState(run.runDir);
+
+    assert.equal(result.completedPhase.id, 'resolve-project-root');
+    assert.equal(result.nextPhase.id, 'project-discovery');
+    assert.equal(result.workflowCompleted, false);
+    assert.equal(state.current_phase, 'project-discovery');
+    assert.deepEqual(state.completed_phases, ['resolve-project-root']);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('complete reports when the next phase is a user gate', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-complete-gate-'));
+  try {
+    const run = createRun(repoRoot, {
+      agentId: 'interaction-audit',
+      project: repoRoot,
+      runRoot: tempRoot,
+      runId: 'gate-run'
+    });
+    const state = loadRunState(run.runDir);
+    state.current_phase = 'source-of-truth';
+    state.completed_phases = ['resolve-project-root', 'project-discovery'];
+    saveRunState(run.runDir, state);
+    writeFileSync(join(run.runDir, '03-source-of-truth-matrix.md'), '# Matrix\n');
+
+    const result = completeRun(repoRoot, run.runDir);
+
+    assert.equal(result.nextPhase.id, 'scope-confirmation');
+    assert.equal(result.userGate, true);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('complete marks the run completed after the final phase', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-complete-final-'));
+  try {
+    const run = createRun(repoRoot, {
+      agentId: 'interaction-audit',
+      project: repoRoot,
+      runRoot: tempRoot,
+      runId: 'final-run'
+    });
+    const state = loadRunState(run.runDir);
+    state.current_phase = 'report-assembly';
+    state.completed_phases = [
+      'resolve-project-root',
+      'project-discovery',
+      'source-of-truth',
+      'scope-confirmation',
+      'branch-planning',
+      'interaction-audit',
+      'visual-conformance-audit',
+      'e2e-coverage-audit'
+    ];
+    saveRunState(run.runDir, state);
+    writeFileSync(join(run.runDir, '07-final-report.md'), '# Report\n');
+
+    const result = completeRun(repoRoot, run.runDir);
+    const completedState = loadRunState(run.runDir);
+
+    assert.equal(result.workflowCompleted, true);
+    assert.equal(result.nextPhase, null);
+    assert.equal(completedState.status, 'completed');
+    assert.equal(completedState.current_phase, null);
+    assert.deepEqual(completedState.completed_phases, [
+      'resolve-project-root',
+      'project-discovery',
+      'source-of-truth',
+      'scope-confirmation',
+      'branch-planning',
+      'interaction-audit',
+      'visual-conformance-audit',
+      'e2e-coverage-audit',
+      'report-assembly'
+    ]);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }

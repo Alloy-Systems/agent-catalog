@@ -2,6 +2,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  completeRun,
   createRun,
   loadAgent,
   loadCatalog,
@@ -37,6 +38,7 @@ function printUsage() {
     '  alloycat init <agent-id> --project <path> [--run-root <path>] [--run-id <id>]',
     '  alloycat status --run <path>',
     '  alloycat next --run <path>',
+    '  alloycat complete --run <path>',
     '  alloycat validate'
   ].join('\n'));
 }
@@ -86,6 +88,22 @@ function commandNext(options) {
   console.log(renderNextPrompt(repoRoot, runDir));
 }
 
+function commandComplete(options) {
+  const runDir = requireOption(options, 'run');
+  const result = completeRun(repoRoot, runDir);
+
+  console.log(`Completed phase: ${result.completedPhase.id}`);
+  if (result.workflowCompleted) {
+    console.log('Workflow completed.');
+    return;
+  }
+
+  console.log(`Current phase: ${result.nextPhase.id}`);
+  if (result.userGate) {
+    console.log(`Workflow stopped at user confirmation gate: ${result.nextPhase.id}`);
+  }
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const { options, positional } = parseOptions(rest);
@@ -117,6 +135,11 @@ async function main() {
 
   if (command === 'next') {
     commandNext(options);
+    return;
+  }
+
+  if (command === 'complete') {
+    commandComplete(options);
     return;
   }
 

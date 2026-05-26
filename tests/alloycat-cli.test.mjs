@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -51,6 +51,67 @@ test('init, status, and next operate on a durable run folder', () => {
     const next = runCli(['next', '--run', runDir]);
     assert.equal(next.status, 0, next.stderr);
     assert.match(next.stdout, /Phase: resolve-project-root/);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('complete advances a run and reports user confirmation gates', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-complete-'));
+  try {
+    const init = runCli([
+      'init',
+      'interaction-audit',
+      '--project',
+      repoRoot,
+      '--run-root',
+      tempRoot,
+      '--run-id',
+      'cli-complete-run'
+    ]);
+    assert.equal(init.status, 0, init.stderr);
+
+    const runDir = join(tempRoot, 'cli-complete-run');
+    writeFileSync(join(runDir, '00-project-root.json'), '{}\n');
+    let complete = runCli(['complete', '--run', runDir]);
+    assert.equal(complete.status, 0, complete.stderr);
+    assert.match(complete.stdout, /Completed phase: resolve-project-root/);
+    assert.match(complete.stdout, /Current phase: project-discovery/);
+
+    writeFileSync(join(runDir, '01-project-discovery.md'), '# Discovery\n');
+    writeFileSync(join(runDir, '02-ui-inventory.json'), '{}\n');
+    complete = runCli(['complete', '--run', runDir]);
+    assert.equal(complete.status, 0, complete.stderr);
+    assert.match(complete.stdout, /Current phase: source-of-truth/);
+
+    writeFileSync(join(runDir, '03-source-of-truth-matrix.md'), '# Matrix\n');
+    complete = runCli(['complete', '--run', runDir]);
+    assert.equal(complete.status, 0, complete.stderr);
+    assert.match(complete.stdout, /Current phase: scope-confirmation/);
+    assert.match(complete.stdout, /Workflow stopped at user confirmation gate: scope-confirmation/);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('complete exits nonzero when current phase outputs are missing', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-complete-missing-'));
+  try {
+    const init = runCli([
+      'init',
+      'interaction-audit',
+      '--project',
+      repoRoot,
+      '--run-root',
+      tempRoot,
+      '--run-id',
+      'cli-missing-run'
+    ]);
+    assert.equal(init.status, 0, init.stderr);
+
+    const complete = runCli(['complete', '--run', join(tempRoot, 'cli-missing-run')]);
+    assert.notEqual(complete.status, 0);
+    assert.match(complete.stderr, /Missing output artifacts for phase resolve-project-root/);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
