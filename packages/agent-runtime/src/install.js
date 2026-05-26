@@ -2,6 +2,8 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
+  rmSync,
   statSync,
   writeFileSync
 } from 'node:fs';
@@ -63,11 +65,76 @@ function ensureGitignoreEntry(projectRoot) {
   return 'added';
 }
 
+function normalizeGitignoreEntry(line) {
+  return line.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+}
+
+function removeGitignoreEntry(projectRoot) {
+  const gitignorePath = join(projectRoot, '.gitignore');
+  if (!existsSync(gitignorePath)) {
+    return 'absent';
+  }
+
+  const current = readFileSync(gitignorePath, 'utf8');
+  const lines = current.split(/\r?\n/);
+  const nextLines = lines.filter((line) => normalizeGitignoreEntry(line) !== '.alloycat');
+  if (nextLines.length === lines.length) {
+    return 'absent';
+  }
+
+  const next = nextLines.join('\n');
+  writeFileSync(gitignorePath, next && !next.endsWith('\n') ? `${next}\n` : next);
+  return 'removed';
+}
+
+function cleanupEmptyInstallRoot(projectRoot) {
+  const alloycatRoot = join(projectRoot, '.alloycat');
+  const agentsRoot = join(alloycatRoot, 'agents');
+
+  if (existsSync(agentsRoot) && readdirSync(agentsRoot).length === 0) {
+    rmSync(agentsRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+
+  if (existsSync(alloycatRoot) && readdirSync(alloycatRoot).length === 0) {
+    rmSync(alloycatRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+
+  return existsSync(alloycatRoot) ? 'kept' : 'removed';
+}
+
 export function resolveProjectRoot(startPath = process.cwd()) {
   const resolvedStart = resolve(startPath);
   const start = statSync(resolvedStart).isDirectory() ? resolvedStart : dirname(resolvedStart);
 
   return findUp(start, '.git') ?? findUp(start, 'package.json') ?? start;
+}
+
+export function listInstalledAgents(projectRoot) {
+  const agentsRoot = join(resolve(projectRoot), '.alloycat', 'agents');
+  if (!existsSync(agentsRoot)) {
+    return [];
+  }
+
+  return readdirSync(agentsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const installDir = join(agentsRoot, entry.name);
+      const configPath = join(installDir, 'index.json');
+      if (!existsSync(configPath)) {
+        return null;
+      }
+
+      const config = JSON.parse(readFileSync(configPath, 'utf8'));
+      return {
+        id: config.agent_id ?? entry.name,
+        installDir,
+        configPath,
+        runRoot: config.run_root,
+        config
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.id.localeCompare(right.id));
 }
 
 export function installAgent(repoRoot, options) {
@@ -106,5 +173,32 @@ export function installAgent(repoRoot, options) {
     runRoot,
     gitignoreStatus: ensureGitignoreEntry(projectRoot),
     mode
+  };
+}
+
+export function uninstallAgent(_repoRoot, options) {
+  const projectRoot = options.project ? resolve(options.project) : resolveProjectRoot();
+  requireDirectory(projectRoot, 'Project root');
+
+  const installedAgent = listInstalledAgents(projectRoot)
+    .find((agent) => agent.id === options.agentId);
+  if (!installedAgent) {
+    throw new Error(`Agent is not installed: ${options.agentId}`);
+  }
+
+  rmSync(installedAgent.installDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+
+  const remainingAgents = listInstalledAgents(projectRoot);
+  const installRootStatus = cleanupEmptyInstallRoot(projectRoot);
+  const gitignoreStatus = remainingAgents.length === 0 && installRootStatus === 'removed'
+    ? removeGitignoreEntry(projectRoot)
+    : 'kept';
+
+  return {
+    agentId: installedAgent.id,
+    projectRoot,
+    installDir: installedAgent.installDir,
+    gitignoreStatus,
+    installRootStatus
   };
 }

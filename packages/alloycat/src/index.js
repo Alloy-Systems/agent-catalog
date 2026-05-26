@@ -7,10 +7,13 @@ import {
   completeRun,
   createRun,
   installAgent,
+  listInstalledAgents,
   loadAgent,
   loadCatalog,
   loadRunState,
-  renderNextPrompt
+  renderNextPrompt,
+  resolveProjectRoot,
+  uninstallAgent
 } from '../../agent-runtime/src/index.js';
 
 const entrypointPath = fileURLToPath(import.meta.url);
@@ -156,6 +159,7 @@ function printUsage() {
     '  alloycat info <agent-id>',
     '  alloycat install [agent-id] [--project <path>] [--mode linked]',
     '  alloycat i [agent-id] [--project <path>] [--mode linked]',
+    '  alloycat uninstall [agent-id] [--project <path>]',
     '  alloycat init <agent-id> --project <path> [--run-root <path>] [--run-id <id>]',
     '  alloycat status --run <path>',
     '  alloycat next --run <path>',
@@ -194,8 +198,15 @@ function printInstallResult(result, commandPrefix = defaultCommandPrefix) {
   console.log(`  ${commandPrefix} next --run <run-dir>`);
 }
 
-function printAgentChoices(catalog) {
-  console.log('Select an agent to install:');
+function printUninstallResult(result) {
+  console.log(`Uninstalled agent: ${result.agentId}`);
+  console.log(`Project root: ${result.projectRoot}`);
+  console.log(`Removed: ${result.installDir}`);
+  console.log(`Gitignore: ${result.gitignoreStatus} .alloycat/`);
+}
+
+function printAgentChoices(catalog, action = 'install') {
+  console.log(`Select an agent to ${action}:`);
   console.log('');
   catalog.agents.forEach((agent, index) => {
     console.log(`${index + 1}. ${agent.id}\t${agent.status}\t${agent.description}`);
@@ -221,7 +232,7 @@ async function readSelection() {
 
 async function selectAgentId() {
   const catalog = loadCatalog(repoRoot);
-  printAgentChoices(catalog);
+  printAgentChoices(catalog, 'install');
 
   const rawSelection = (await readSelection()).trim();
   if (!rawSelection) {
@@ -236,6 +247,40 @@ async function selectAgentId() {
   return catalog.agents[selection - 1].id;
 }
 
+function resolveCommandProjectRoot(options) {
+  return options.project ? resolve(options.project) : resolveProjectRoot();
+}
+
+function printInstalledAgentChoices(installedAgents) {
+  console.log('Select an installed agent to uninstall:');
+  console.log('');
+  installedAgents.forEach((agent, index) => {
+    console.log(`${index + 1}. ${agent.id}`);
+  });
+  console.log('');
+}
+
+async function selectInstalledAgentId(projectRoot) {
+  const installedAgents = listInstalledAgents(projectRoot);
+  if (installedAgents.length === 0) {
+    throw new Error(`No installed agents found in project: ${projectRoot}`);
+  }
+
+  printInstalledAgentChoices(installedAgents);
+
+  const rawSelection = (await readSelection()).trim();
+  if (!rawSelection) {
+    throw new Error('Agent id is required when running non-interactively. Run: alloycat uninstall <agent-id>');
+  }
+
+  const selection = Number(rawSelection);
+  if (!Number.isInteger(selection) || selection < 1 || selection > installedAgents.length) {
+    throw new Error(`Invalid installed agent selection: ${rawSelection}`);
+  }
+
+  return installedAgents[selection - 1].id;
+}
+
 async function commandInstall(agentId, options) {
   const selectedAgentId = agentId ?? await selectAgentId();
   const result = installAgent(repoRoot, {
@@ -244,6 +289,16 @@ async function commandInstall(agentId, options) {
     mode: options.mode
   });
   printInstallResult(result);
+}
+
+async function commandUninstall(agentId, options) {
+  const projectRoot = resolveCommandProjectRoot(options);
+  const selectedAgentId = agentId ?? await selectInstalledAgentId(projectRoot);
+  const result = uninstallAgent(repoRoot, {
+    agentId: selectedAgentId,
+    project: projectRoot
+  });
+  printUninstallResult(result);
 }
 
 function commandInit(agentId, options) {
@@ -312,6 +367,11 @@ async function main() {
 
   if (command === 'install' || command === 'i') {
     await commandInstall(positional[0], options);
+    return;
+  }
+
+  if (command === 'uninstall') {
+    await commandUninstall(positional[0], options);
     return;
   }
 

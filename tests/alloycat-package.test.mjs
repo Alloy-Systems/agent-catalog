@@ -142,6 +142,29 @@ test('packed alloycat package installs with the i alias through npx', () => {
   }
 });
 
+test('packed alloycat package uninstalls from a target project through npx', () => {
+  const tarball = packAlloycat();
+  const targetRoot = mkdtempSync(join(tmpdir(), 'alloycat-packed-uninstall-target-'));
+  try {
+    const packageSpec = npxPackageSpec(tarball);
+    const install = run('npx', ['--yes', packageSpec, 'i', 'interaction-audit'], {
+      cwd: targetRoot
+    });
+    assert.equal(install.status, 0, install.stderr);
+
+    const result = run('npx', ['--yes', packageSpec, 'uninstall', 'interaction-audit'], {
+      cwd: targetRoot
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Uninstalled agent: interaction-audit/);
+    assert.equal(existsSync(join(targetRoot, '.alloycat')), false);
+    assert.doesNotMatch(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
+  } finally {
+    rmSync(targetRoot, { recursive: true, force: true });
+  }
+});
+
 test('packed alloycat package infers registry npx command prefix from lockfile', () => {
   packAlloycat();
   const cacheRoot = mkdtempSync(join(tmpdir(), 'alloycat-npx-cache-'));

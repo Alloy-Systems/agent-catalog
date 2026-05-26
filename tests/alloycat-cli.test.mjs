@@ -204,6 +204,54 @@ test('install rejects unsupported install modes before writing project config', 
   }
 });
 
+test('uninstall with an agent id removes the project install', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-uninstall-direct-'));
+  try {
+    const install = runCli(['install', 'interaction-audit', '--project', tempRoot]);
+    assert.equal(install.status, 0, install.stderr);
+
+    const result = runCli(['uninstall', 'interaction-audit', '--project', tempRoot]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Uninstalled agent: interaction-audit/);
+    assert.match(result.stdout, /Gitignore: removed \.alloycat\//);
+    assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
+    assert.doesNotMatch(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('uninstall without an agent id accepts a numbered installed-agent selection from stdin', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-uninstall-select-'));
+  try {
+    const install = runCli(['install', 'interaction-audit', '--project', tempRoot]);
+    assert.equal(install.status, 0, install.stderr);
+
+    const result = runCli(['uninstall', '--project', tempRoot], { input: '1\n' });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Select an installed agent to uninstall:/);
+    assert.match(result.stdout, /1\. interaction-audit/);
+    assert.match(result.stdout, /Uninstalled agent: interaction-audit/);
+    assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('uninstall without installed agents exits nonzero', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-uninstall-empty-'));
+  try {
+    const result = runCli(['uninstall', '--project', tempRoot], { input: '' });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /No installed agents found/);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('init, status, and next operate on a durable run folder', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-'));
   try {

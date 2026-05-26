@@ -12,6 +12,7 @@ import {
   completeRun,
   resolveProjectRoot,
   installAgent,
+  uninstallAgent,
   renderNextPrompt,
   saveRunState
 } from '../packages/agent-runtime/src/index.js';
@@ -153,6 +154,47 @@ test('linked install repeated from an empty project keeps one alloycat gitignore
     assert.equal(second.gitignoreStatus, 'already-present');
     assert.equal(gitignore.match(/^\.alloycat\/$/gm).length, 1);
     assert.equal(gitignore.includes('.agent-runs'), false);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('uninstall removes an installed agent and cleans project ignore state', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-uninstall-runtime-'));
+  try {
+    installAgent(repoRoot, {
+      agentId: 'interaction-audit',
+      project: tempRoot
+    });
+    const runRoot = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs');
+    writeFileSync(join(runRoot, 'old-run.txt'), 'run artifact\n');
+
+    const result = uninstallAgent(repoRoot, {
+      agentId: 'interaction-audit',
+      project: tempRoot
+    });
+
+    assert.equal(result.agentId, 'interaction-audit');
+    assert.equal(result.projectRoot, tempRoot);
+    assert.equal(result.gitignoreStatus, 'removed');
+    assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
+    assert.doesNotMatch(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('uninstall rejects agents that are not installed', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-uninstall-missing-runtime-'));
+  try {
+    assert.throws(
+      () => uninstallAgent(repoRoot, {
+        agentId: 'interaction-audit',
+        project: tempRoot
+      }),
+      /Agent is not installed: interaction-audit/
+    );
+    assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
