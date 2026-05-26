@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   completeRun,
   createRun,
@@ -13,8 +13,81 @@ import {
   renderNextPrompt
 } from '../../agent-runtime/src/index.js';
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const defaultCommandPrefix = process.env.ALLOYCAT_COMMAND_PREFIX ?? 'alloycat';
+const entrypointPath = fileURLToPath(import.meta.url);
+const repoRoot = resolve(dirname(entrypointPath), '../../..');
+
+function readJson(path) {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function findNpxRoot(startPath) {
+  let current = dirname(startPath);
+  while (true) {
+    const parent = dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    if (basename(parent) === '_npx') {
+      return current;
+    }
+    current = parent;
+  }
+}
+
+function normalizeNpxPackageSpec(spec, npxRoot) {
+  if (!spec.startsWith('file:')) {
+    return spec;
+  }
+
+  return new URL(spec, pathToFileURL(`${npxRoot}${sep}`)).href;
+}
+
+function inferNpxPackageSpec(startPath) {
+  try {
+    const npxRoot = findNpxRoot(startPath);
+    if (!npxRoot) {
+      return null;
+    }
+
+    const packageRoot = resolve(dirname(startPath), '..');
+    const manifest = readJson(join(packageRoot, 'package.json'));
+    const lockfile = readJson(join(npxRoot, 'package-lock.json'));
+    const dependencySpec = lockfile.packages?.['']?.dependencies?.[manifest.name];
+    if (dependencySpec?.startsWith('file:')) {
+      return normalizeNpxPackageSpec(dependencySpec, npxRoot);
+    }
+
+    const lockedPackage = lockfile.packages?.[`node_modules/${manifest.name}`];
+    if (lockedPackage?.resolved?.startsWith('file:')) {
+      return normalizeNpxPackageSpec(lockedPackage.resolved, npxRoot);
+    }
+
+    if (lockedPackage?.version) {
+      return `${manifest.name}@${lockedPackage.version}`;
+    }
+
+    return dependencySpec ? `${manifest.name}@${dependencySpec}` : manifest.name;
+  } catch {
+    return null;
+  }
+}
+
+function resolveDefaultCommandPrefix() {
+  const explicitPrefix = process.env.ALLOYCAT_COMMAND_PREFIX?.trim();
+  if (explicitPrefix) {
+    return explicitPrefix;
+  }
+
+  const envPackage = process.env.npm_config_package?.trim();
+  const npxPackage = envPackage || inferNpxPackageSpec(entrypointPath);
+  if (process.env.npm_lifecycle_event === 'npx' && npxPackage) {
+    return `npx --yes ${npxPackage}`;
+  }
+
+  return 'alloycat';
+}
+
+const defaultCommandPrefix = resolveDefaultCommandPrefix();
 
 function parseOptions(args) {
   const options = {};

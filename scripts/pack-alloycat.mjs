@@ -65,8 +65,8 @@ function replaceRequired(source, search, replacement) {
 function validateStagedEntrypoint(source) {
   const requiredStrings = [
     "from '../runtime/index.js';",
-    "const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../catalog');",
-    "const defaultCommandPrefix = process.env.ALLOYCAT_COMMAND_PREFIX ?? 'npx @alloy/alloycat';"
+    "const repoRoot = resolve(dirname(entrypointPath), '../catalog');",
+    "process.env.npm_config_package?.trim()"
   ];
   const forbiddenStrings = [
     '../../agent-runtime/src/index.js',
@@ -174,13 +174,8 @@ function writePackagedEntrypoint() {
   );
   patched = replaceRequired(
     patched,
-    "const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');",
-    "const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../catalog');"
-  );
-  patched = replaceRequired(
-    patched,
-    "const defaultCommandPrefix = process.env.ALLOYCAT_COMMAND_PREFIX ?? 'alloycat';",
-    "const defaultCommandPrefix = process.env.ALLOYCAT_COMMAND_PREFIX ?? 'npx @alloy/alloycat';"
+    "const repoRoot = resolve(dirname(entrypointPath), '../../..');",
+    "const repoRoot = resolve(dirname(entrypointPath), '../catalog');"
   );
   patched = replaceRequired(
     patched,

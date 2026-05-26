@@ -1,9 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import {
+  cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
-  rmSync
+  rmSync,
+  writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -97,8 +100,9 @@ test('packed alloycat package installs into a target project through npx', () =>
 
     assert.equal(config.agent_id, 'interaction-audit');
     assert.equal(config.mode, 'linked');
-    assert.match(result.stdout, /npx @alloy\/alloycat init interaction-audit/);
-    assert.match(result.stdout, /npx @alloy\/alloycat next --run <run-dir>/);
+    const commandPrefix = `npx --yes ${npxPackageSpec(tarball)}`;
+    assert.equal(result.stdout.includes(`${commandPrefix} init interaction-audit`), true);
+    assert.equal(result.stdout.includes(`${commandPrefix} next --run <run-dir>`), true);
     assert.equal(existsSync(join(targetRoot, '.agent-runs', 'interaction-audit')), true);
     assert.match(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
     const catalogRoot = resolve(config.catalog_root);
@@ -109,6 +113,54 @@ test('packed alloycat package installs into a target project through npx', () =>
     assert.notEqual(catalogRoot, sourceCatalogRoot);
     assert.equal(relativeToRepo.startsWith('..') || isAbsolute(relativeToRepo), true);
   } finally {
+    rmSync(targetRoot, { recursive: true, force: true });
+  }
+});
+
+test('packed alloycat package infers registry npx command prefix from lockfile', () => {
+  packAlloycat();
+  const cacheRoot = mkdtempSync(join(tmpdir(), 'alloycat-npx-cache-'));
+  const targetRoot = mkdtempSync(join(tmpdir(), 'alloycat-packed-registry-target-'));
+  try {
+    const npxRoot = join(cacheRoot, '_npx', 'registry-run');
+    const packageRoot = join(npxRoot, 'node_modules', '@alloy', 'alloycat');
+
+    mkdirSync(dirname(packageRoot), { recursive: true });
+    cpSync(join(repoRoot, 'packages', 'alloycat', 'dist-package'), packageRoot, { recursive: true });
+    writeFileSync(join(npxRoot, 'package-lock.json'), `${JSON.stringify({
+      lockfileVersion: 3,
+      packages: {
+        '': {
+          dependencies: {
+            '@alloy/alloycat': '^0.1.0'
+          }
+        },
+        'node_modules/@alloy/alloycat': {
+          version: '0.1.0',
+          resolved: 'https://registry.npmjs.org/@alloy/alloycat/-/alloycat-0.1.0.tgz',
+          bin: {
+            alloycat: 'src/index.js'
+          }
+        }
+      }
+    }, null, 2)}\n`);
+
+    const result = spawnSync(process.execPath, [join(packageRoot, 'src', 'index.js'), 'install', 'interaction-audit'], {
+      cwd: targetRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        npm_lifecycle_event: 'npx',
+        npm_config_package: ''
+      },
+      shell: false
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /^  npx --yes @alloy\/alloycat@0\.1\.0 init interaction-audit /m);
+    assert.match(result.stdout, /^  npx --yes @alloy\/alloycat@0\.1\.0 next --run <run-dir>$/m);
+  } finally {
+    rmSync(cacheRoot, { recursive: true, force: true });
     rmSync(targetRoot, { recursive: true, force: true });
   }
 });
