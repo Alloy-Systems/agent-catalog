@@ -1,0 +1,82 @@
+workflow:
+  id: interaction-audit
+  name: Alloy Interaction Audit Agent
+  schema_version: 1
+
+phases:
+  - id: resolve-project-root
+    prompt: prompts/00-resolve-project-root.md
+    outputs:
+      - 00-project-root.json
+
+  - id: project-discovery
+    prompt: prompts/01-project-discovery.md
+    inputs:
+      - 00-project-root.json
+    outputs:
+      - 01-project-discovery.md
+      - 02-ui-inventory.json
+
+  - id: source-of-truth
+    prompt: prompts/02-source-of-truth.md
+    inputs:
+      - 01-project-discovery.md
+      - 02-ui-inventory.json
+    outputs:
+      - 03-source-of-truth-matrix.md
+
+  - id: scope-confirmation
+    prompt: prompts/03-scope-confirmation.md
+    inputs:
+      - 01-project-discovery.md
+      - 02-ui-inventory.json
+      - 03-source-of-truth-matrix.md
+    outputs:
+      - 04-confirmed-scope.md
+    user_gate: true
+
+  - id: branch-planning
+    prompt: prompts/04-branch-planning.md
+    inputs:
+      - 04-confirmed-scope.md
+      - 03-source-of-truth-matrix.md
+      - 02-ui-inventory.json
+    outputs:
+      - 05-branch-plan.json
+
+  - id: interaction-audit
+    prompt: prompts/05A-interaction-audit.md
+    branch_key: run_interaction_audit
+    inputs:
+      - 04-confirmed-scope.md
+      - 05-branch-plan.json
+      - 02-ui-inventory.json
+    outputs:
+      - 06A-interaction-findings.md
+
+  - id: visual-conformance-audit
+    prompt: prompts/05B-visual-conformance-audit.md
+    branch_key: run_visual_conformance_audit
+    inputs:
+      - 04-confirmed-scope.md
+      - 05-branch-plan.json
+      - 03-source-of-truth-matrix.md
+    outputs:
+      - 06B-visual-findings.md
+
+  - id: e2e-coverage-audit
+    prompt: prompts/05C-e2e-coverage-audit.md
+    branch_key: run_e2e_coverage_audit
+    inputs:
+      - 04-confirmed-scope.md
+      - 05-branch-plan.json
+    outputs:
+      - 06C-e2e-coverage.md
+
+  - id: report-assembly
+    prompt: prompts/06-report-assembly.md
+    inputs:
+      - 04-confirmed-scope.md
+      - 05-branch-plan.json
+    outputs:
+      - 07-final-report.md

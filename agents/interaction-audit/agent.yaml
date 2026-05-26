@@ -1,0 +1,31 @@
+id: interaction-audit
+name: Alloy Interaction Audit Agent
+type: phase-gated-agent
+runtime_model: workflow
+status: draft
+version: 0.1.0
+description: Agent that audits visible UI behavior, source-of-truth conformance, and e2e coverage.
+
+entrypoint:
+  command: alloycat run interaction-audit
+  orchestrator: scripts/auditctl.mjs
+
+artifacts:
+  run_root: .agent-runs/interaction-audit
+  state_file: state.json
+
+supports:
+  hosts:
+    primary-cli:
+      adapter_path: adapters/primary-cli
+      status: skeleton
+    secondary-cli:
+      adapter_path: adapters/secondary-cli
+      status: skeleton
+
+quality_gates:
+  requires_project_discovery: true
+  requires_user_scope_confirmation: true
+  requires_persistent_artifacts: true
+  forbids_single_prompt_full_run: true
+  requires_tests: true

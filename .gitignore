@@ -1,0 +1,5 @@
+.agent-runs/
+node_modules/
+dist/
+coverage/
+*.log

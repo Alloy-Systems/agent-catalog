@@ -1,0 +1,9 @@
+{
+  "name": "@alloy/alloycat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "alloycat": "./src/index.js"
+  }
+}

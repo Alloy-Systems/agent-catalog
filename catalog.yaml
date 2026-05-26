@@ -1,0 +1,13 @@
+catalog:
+  name: Alloy Agent Catalog
+  schema_version: 1
+
+agents:
+  - id: interaction-audit
+    path: agents/interaction-audit
+    status: draft
+    version: 0.1.0
+    description: Agent that audits visible UI behavior, source-of-truth conformance, and e2e coverage.
+    hosts:
+      - primary-cli
+      - secondary-cli
