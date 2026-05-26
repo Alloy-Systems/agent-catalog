@@ -11,7 +11,7 @@ export function createRun(repoRoot, options) {
   const workflow = loadWorkflow(repoRoot, agentId);
   const runId = options.runId ?? defaultRunId();
   const projectRoot = resolve(options.project);
-  const runRoot = resolve(options.runRoot ?? join(projectRoot, '.agent-runs', agentId));
+  const runRoot = resolve(options.runRoot ?? join(projectRoot, '.alloycat', 'agents', agentId, 'runs'));
   const runDir = join(runRoot, runId);
   const firstPhase = workflow.phases[0];
 

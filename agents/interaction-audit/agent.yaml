@@ -11,7 +11,7 @@ entrypoint:
   orchestrator: scripts/auditctl.mjs
 
 artifacts:
-  run_root: .agent-runs/interaction-audit
+  run_root: .alloycat/agents/interaction-audit/runs
   state_file: state.json
 
 supports:

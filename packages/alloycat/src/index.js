@@ -186,7 +186,7 @@ function printInstallResult(result, commandPrefix = defaultCommandPrefix) {
   console.log(`Installed agent: ${result.agent.id}`);
   console.log(`Project root: ${result.projectRoot}`);
   console.log(`Config: ${result.configPath}`);
-  console.log(`Gitignore: ${result.gitignoreStatus} .agent-runs/, .alloycat/`);
+  console.log(`Gitignore: ${result.gitignoreStatus} .alloycat/`);
   console.log('');
   console.log('Next:');
   console.log(`  ${commandPrefix} init ${result.agent.id} --project ${shellPathArg(result.projectRoot)}`);

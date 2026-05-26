@@ -33,26 +33,9 @@ function requireDirectory(path, label) {
   }
 }
 
-function writeInstallReadme(projectRoot) {
-  const readmePath = join(projectRoot, '.alloycat', 'README.md');
-  if (existsSync(readmePath)) {
-    return;
-  }
-
-  writeFileSync(readmePath, [
-    '# Alloycat',
-    '',
-    'This project has local Alloy Agent Catalog install configuration.',
-    '',
-    'Local install metadata is written under `.alloycat/` and run artifacts are written under `.agent-runs/`.',
-    'Both paths are ignored by git for linked installs.',
-    ''
-  ].join('\n'));
-}
-
 function ensureGitignoreEntry(projectRoot) {
   const gitignorePath = join(projectRoot, '.gitignore');
-  const entries = ['.agent-runs/', '.alloycat/'];
+  const entries = ['.alloycat/'];
   const requiredEntries = entries.map((entry) => ({
     entry,
     key: entry.replace(/^\/+/, '').replace(/\/+$/, '')
@@ -98,13 +81,12 @@ export function installAgent(repoRoot, options) {
   requireDirectory(projectRoot, 'Project root');
 
   const agentPath = resolve(repoRoot, agent.path);
-  const configDir = join(projectRoot, '.alloycat', 'agents');
-  const configPath = join(configDir, `${agent.id}.json`);
-  const runRoot = join(projectRoot, '.agent-runs', agent.id);
+  const installDir = join(projectRoot, '.alloycat', 'agents', agent.id);
+  const configPath = join(installDir, 'index.json');
+  const runRoot = join(installDir, 'runs');
 
-  mkdirSync(configDir, { recursive: true });
+  mkdirSync(installDir, { recursive: true });
   mkdirSync(runRoot, { recursive: true });
-  writeInstallReadme(projectRoot);
 
   const config = {
     schema_version: 1,

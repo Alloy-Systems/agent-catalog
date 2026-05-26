@@ -68,9 +68,9 @@ test('linked install writes project config, run root, readme, and gitignore entr
       project: tempRoot
     });
 
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
     const readmePath = join(tempRoot, '.alloycat', 'README.md');
-    const runRoot = join(tempRoot, '.agent-runs', 'interaction-audit');
+    const runRoot = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs');
     const gitignorePath = join(tempRoot, '.gitignore');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
@@ -87,19 +87,20 @@ test('linked install writes project config, run root, readme, and gitignore entr
     assert.equal(config.agent_path, join(repoRoot, 'agents', 'interaction-audit'));
     assert.equal(config.run_root, runRoot);
     assert.match(config.installed_at, /^\d{4}-\d{2}-\d{2}T/);
-    assert.equal(existsSync(readmePath), true);
+    assert.equal(existsSync(readmePath), false);
     assert.equal(existsSync(runRoot), true);
-    assert.match(readFileSync(gitignorePath, 'utf8'), /^\.agent-runs\/$/m);
+    assert.equal(existsSync(join(tempRoot, '.agent-runs')), false);
     assert.match(readFileSync(gitignorePath, 'utf8'), /^\.alloycat\/$/m);
+    assert.doesNotMatch(readFileSync(gitignorePath, 'utf8'), /^\.agent-runs\/$/m);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
 });
 
-test('linked install does not duplicate an existing agent runs gitignore entry', () => {
+test('linked install does not duplicate an existing alloycat gitignore entry', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-install-idempotent-'));
   try {
-    writeFileSync(join(tempRoot, '.gitignore'), 'node_modules/\n.agent-runs\n/.alloycat/\ndist/\n');
+    writeFileSync(join(tempRoot, '.gitignore'), 'node_modules/\n/.alloycat/\ndist/\n');
 
     const first = installAgent(repoRoot, {
       agentId: 'interaction-audit',
@@ -113,33 +114,30 @@ test('linked install does not duplicate an existing agent runs gitignore entry',
 
     assert.equal(first.gitignoreStatus, 'already-present');
     assert.equal(second.gitignoreStatus, 'already-present');
-    assert.equal(gitignore.match(/^\.agent-runs\/?$/gm).length, 1);
     assert.equal(gitignore.match(/^\/?\.alloycat\/?$/gm).length, 1);
+    assert.equal(gitignore.includes('.agent-runs'), false);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
 });
 
-test('linked install preserves an existing alloycat readme', () => {
+test('linked install does not write an alloycat readme', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-install-readme-'));
   try {
     const readmePath = join(tempRoot, '.alloycat', 'README.md');
-    const existingReadme = '# Local Alloycat Notes\n\nKeep this project-specific note.\n';
-    mkdirSync(join(tempRoot, '.alloycat'), { recursive: true });
-    writeFileSync(readmePath, existingReadme);
 
     installAgent(repoRoot, {
       agentId: 'interaction-audit',
       project: tempRoot
     });
 
-    assert.equal(readFileSync(readmePath, 'utf8'), existingReadme);
+    assert.equal(existsSync(readmePath), false);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
 });
 
-test('linked install repeated from an empty project keeps one agent runs gitignore entry', () => {
+test('linked install repeated from an empty project keeps one alloycat gitignore entry', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-install-repeat-'));
   try {
     installAgent(repoRoot, {
@@ -153,8 +151,8 @@ test('linked install repeated from an empty project keeps one agent runs gitigno
     const gitignore = readFileSync(join(tempRoot, '.gitignore'), 'utf8');
 
     assert.equal(second.gitignoreStatus, 'already-present');
-    assert.equal(gitignore.match(/^\.agent-runs\/$/gm).length, 1);
     assert.equal(gitignore.match(/^\.alloycat\/$/gm).length, 1);
+    assert.equal(gitignore.includes('.agent-runs'), false);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -169,7 +167,7 @@ test('create run defaults run root to the target project agent runs folder', () 
       runId: 'default-root-run'
     });
 
-    assert.equal(run.runDir, join(tempRoot, '.agent-runs', 'interaction-audit', 'default-root-run'));
+    assert.equal(run.runDir, join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs', 'default-root-run'));
     assert.equal(loadRunState(run.runDir).project_root, tempRoot);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });

@@ -95,7 +95,7 @@ test('packed alloycat package installs into a target project through npx', () =>
     });
     assert.equal(result.status, 0, result.stderr);
 
-    const configPath = join(targetRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const configPath = join(targetRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
     assert.equal(config.agent_id, 'interaction-audit');
@@ -104,9 +104,10 @@ test('packed alloycat package installs into a target project through npx', () =>
     assert.equal(result.stdout.includes(`${commandPrefix} init interaction-audit --project .`), true);
     assert.equal(result.stdout.includes('--run-root'), false);
     assert.equal(result.stdout.includes(`${commandPrefix} next --run <run-dir>`), true);
-    assert.equal(existsSync(join(targetRoot, '.agent-runs', 'interaction-audit')), true);
-    assert.match(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
+    assert.equal(existsSync(join(targetRoot, '.alloycat', 'agents', 'interaction-audit', 'runs')), true);
+    assert.equal(existsSync(join(targetRoot, '.agent-runs')), false);
     assert.match(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
+    assert.doesNotMatch(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
     const catalogRoot = resolve(config.catalog_root);
     const sourceCatalogRoot = join(repoRoot, 'catalog');
     const relativeToRepo = relative(repoRoot, catalogRoot);

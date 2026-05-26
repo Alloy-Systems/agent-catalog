@@ -35,19 +35,20 @@ test('install with an agent id writes linked install config without prompting', 
     const result = runCli(['install', 'interaction-audit', '--project', tempRoot]);
     assert.equal(result.status, 0, result.stderr);
 
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
     assert.match(result.stdout, /Installed agent: interaction-audit/);
-    assert.match(result.stdout, /Gitignore: added \.agent-runs\/, \.alloycat\//);
+    assert.match(result.stdout, /Gitignore: added \.alloycat\//);
     assert.match(result.stdout, /^  alloycat init interaction-audit /m);
     assert.match(result.stdout, /^  alloycat next --run <run-dir>$/m);
     assert.doesNotMatch(result.stdout, /npx @alloy\/alloycat/);
     assert.equal(config.agent_id, 'interaction-audit');
     assert.equal(config.mode, 'linked');
-    assert.equal(existsSync(join(tempRoot, '.agent-runs', 'interaction-audit')), true);
-    assert.match(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
+    assert.equal(existsSync(join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs')), true);
+    assert.equal(existsSync(join(tempRoot, '.agent-runs')), false);
     assert.match(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
+    assert.doesNotMatch(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -113,7 +114,7 @@ test('install without an agent id accepts a numbered selection from stdin', () =
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-select-'));
   try {
     const result = runCli(['install', '--project', tempRoot], { input: '1\n' });
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
     assert.equal(result.status, 0, result.stderr);
@@ -149,12 +150,12 @@ test('install without project option resolves the project root from nested cwd',
     const result = runCli(['install', 'interaction-audit'], { cwd: nested });
     assert.equal(result.status, 0, result.stderr);
 
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
     assert.equal(result.stdout.includes(`Project root: ${tempRoot}`), true);
     assert.equal(config.agent_id, 'interaction-audit');
-    assert.equal(config.run_root, join(tempRoot, '.agent-runs', 'interaction-audit'));
+    assert.equal(config.run_root, join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs'));
     assert.equal(existsSync(join(nested, '.alloycat')), false);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -229,10 +230,10 @@ test('init without run root writes under the target project and prints next comm
     ], { cwd: tempRoot });
 
     assert.equal(init.status, 0, init.stderr);
-    const runDir = join(tempRoot, '.agent-runs', 'interaction-audit', 'cli-default-root-run');
+    const runDir = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs', 'cli-default-root-run');
 
     assert.equal(existsSync(join(runDir, 'state.json')), true);
-    assert.match(init.stdout, /^  alloycat next --run \.agent-runs\/interaction-audit\/cli-default-root-run$/m);
+    assert.match(init.stdout, /^  alloycat next --run \.alloycat\/agents\/interaction-audit\/runs\/cli-default-root-run$/m);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }

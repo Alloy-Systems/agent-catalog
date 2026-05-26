@@ -18,4 +18,4 @@ This agent uses a phase-gated workflow:
 6. Run selected audit tracks.
 7. Assemble the final report.
 
-Run artifacts are durable and live under `.agent-runs/interaction-audit/<run-id>/` unless the user chooses a different run root.
+Run artifacts are durable and live under `.alloycat/agents/interaction-audit/runs/<run-id>/` unless the user chooses a different run root.
