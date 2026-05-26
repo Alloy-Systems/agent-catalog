@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import {
   completeRun,
   createRun,
+  installAgent,
   loadAgent,
   loadCatalog,
   loadRunState,
@@ -35,6 +36,7 @@ function printUsage() {
     'Usage:',
     '  alloycat list',
     '  alloycat info <agent-id>',
+    '  alloycat install [agent-id] [--project <path>] [--mode linked]',
     '  alloycat init <agent-id> --project <path> [--run-root <path>] [--run-id <id>]',
     '  alloycat status --run <path>',
     '  alloycat next --run <path>',
@@ -60,6 +62,30 @@ function commandList() {
 function commandInfo(agentId) {
   const agent = loadAgent(repoRoot, agentId);
   console.log(JSON.stringify(agent, null, 2));
+}
+
+function printInstallResult(result) {
+  console.log(`Installed agent: ${result.agent.id}`);
+  console.log(`Project root: ${result.projectRoot}`);
+  console.log(`Config: ${result.configPath}`);
+  console.log(`Gitignore: ${result.gitignoreStatus} .agent-runs/`);
+  console.log('');
+  console.log('Next:');
+  console.log(`  alloycat init ${result.agent.id} --project ${result.projectRoot} --run-root ${result.runRoot}`);
+  console.log('  alloycat next --run <run-dir>');
+}
+
+async function commandInstall(agentId, options) {
+  if (!agentId) {
+    throw new Error('Agent id is required when running non-interactively. Run: alloycat install <agent-id>');
+  }
+
+  const result = installAgent(repoRoot, {
+    agentId,
+    project: options.project,
+    mode: options.mode
+  });
+  printInstallResult(result);
 }
 
 function commandInit(agentId, options) {
@@ -120,6 +146,11 @@ async function main() {
 
   if (command === 'info') {
     commandInfo(positional[0]);
+    return;
+  }
+
+  if (command === 'install') {
+    await commandInstall(positional[0], options);
     return;
   }
 
