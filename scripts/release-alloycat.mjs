@@ -11,11 +11,25 @@ function fail(message) {
   process.exit(1);
 }
 
+function windowsShellArg(value) {
+  const text = String(value);
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(text)) {
+    return text;
+  }
+
+  return `"${text.replace(/(["^&|<>])/g, '^$1')}"`;
+}
+
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const useShell = process.platform === 'win32';
+  const spawnCommand = useShell
+    ? [command, ...args.map(windowsShellArg)].join(' ')
+    : command;
+  const spawnArgs = useShell ? [] : args;
+  const result = spawnSync(spawnCommand, spawnArgs, {
     cwd: options.cwd,
     encoding: 'utf8',
-    shell: process.platform === 'win32',
+    shell: useShell,
     stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : 'inherit'
   });
 

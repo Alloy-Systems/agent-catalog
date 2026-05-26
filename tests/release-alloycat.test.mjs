@@ -59,6 +59,7 @@ function writeFakeReleaseCommands(binRoot) {
       'if "%1"=="fetch" exit /b 0',
       'if "%1"=="diff" exit /b 0',
       'if "%1"=="add" exit /b 0',
+      'if "%1"=="commit" if not "%4"=="" exit /b 9',
       'if "%1"=="commit" exit /b 0',
       'if "%1"=="tag" exit /b 0',
       'if "%1"=="push" exit /b 0',
