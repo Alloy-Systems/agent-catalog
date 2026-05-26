@@ -14,6 +14,7 @@ import {
 } from '../../agent-runtime/src/index.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const defaultCommandPrefix = process.env.ALLOYCAT_COMMAND_PREFIX ?? 'alloycat';
 
 function parseOptions(args) {
   const options = {};
@@ -66,15 +67,15 @@ function commandInfo(agentId) {
   console.log(JSON.stringify(agent, null, 2));
 }
 
-function printInstallResult(result) {
+function printInstallResult(result, commandPrefix = defaultCommandPrefix) {
   console.log(`Installed agent: ${result.agent.id}`);
   console.log(`Project root: ${result.projectRoot}`);
   console.log(`Config: ${result.configPath}`);
   console.log(`Gitignore: ${result.gitignoreStatus} .agent-runs/`);
   console.log('');
   console.log('Next:');
-  console.log(`  alloycat init ${result.agent.id} --project ${result.projectRoot} --run-root ${result.runRoot}`);
-  console.log('  alloycat next --run <run-dir>');
+  console.log(`  ${commandPrefix} init ${result.agent.id} --project ${result.projectRoot} --run-root ${result.runRoot}`);
+  console.log(`  ${commandPrefix} next --run <run-dir>`);
 }
 
 function printAgentChoices(catalog) {

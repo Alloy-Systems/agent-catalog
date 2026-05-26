@@ -97,6 +97,8 @@ test('packed alloycat package installs into a target project through npx', () =>
 
     assert.equal(config.agent_id, 'interaction-audit');
     assert.equal(config.mode, 'linked');
+    assert.match(result.stdout, /npx @alloy\/alloycat init interaction-audit/);
+    assert.match(result.stdout, /npx @alloy\/alloycat next --run <run-dir>/);
     assert.equal(existsSync(join(targetRoot, '.agent-runs', 'interaction-audit')), true);
     assert.match(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
     const catalogRoot = resolve(config.catalog_root);

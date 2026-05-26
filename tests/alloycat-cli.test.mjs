@@ -39,7 +39,9 @@ test('install with an agent id writes linked install config without prompting', 
 
     assert.match(result.stdout, /Installed agent: interaction-audit/);
     assert.match(result.stdout, /Gitignore: added \.agent-runs\//);
-    assert.match(result.stdout, /alloycat init interaction-audit/);
+    assert.match(result.stdout, /^  alloycat init interaction-audit /m);
+    assert.match(result.stdout, /^  alloycat next --run <run-dir>$/m);
+    assert.doesNotMatch(result.stdout, /npx @alloy\/alloycat/);
     assert.equal(config.agent_id, 'interaction-audit');
     assert.equal(config.mode, 'linked');
     assert.equal(existsSync(join(tempRoot, '.agent-runs', 'interaction-audit')), true);
