@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
@@ -92,48 +92,6 @@ function resolveDefaultCommandPrefix() {
 
 const defaultCommandPrefix = resolveDefaultCommandPrefix();
 
-function portablePath(path) {
-  return path.replace(/\\/g, '/');
-}
-
-function pathRelativeToCwd(path) {
-  const target = resolve(path);
-  const cwd = resolve(process.cwd());
-  const relativePath = relative(cwd, target);
-
-  if (relativePath === '') {
-    return '.';
-  }
-
-  return portablePath(isAbsolute(relativePath) ? target : relativePath);
-}
-
-function usesPosixShell() {
-  const shell = (process.env.SHELL ?? '').toLowerCase();
-  return Boolean(process.env.MSYSTEM) || /(^|\/)(ba|z|fi)?sh$/.test(shell);
-}
-
-function posixShellArg(text) {
-  return `'${text.replace(/'/g, "'\\''")}'`;
-}
-
-function powershellArg(text) {
-  return `'${text.replace(/'/g, "''")}'`;
-}
-
-function shellArg(value) {
-  const text = String(value);
-  if (/^[A-Za-z0-9_./:@%+-]+$/.test(text)) {
-    return text;
-  }
-
-  return usesPosixShell() ? posixShellArg(text) : powershellArg(text);
-}
-
-function shellPathArg(path) {
-  return shellArg(pathRelativeToCwd(path));
-}
-
 function parseOptions(args) {
   const options = {};
   const positional = [];
@@ -160,19 +118,12 @@ function printUsage() {
     '  alloycat install [agent-id] [--project <path>] [--mode linked]',
     '  alloycat i [agent-id] [--project <path>] [--mode linked]',
     '  alloycat uninstall [agent-id] [--project <path>]',
-    '  alloycat init <agent-id> --project <path> [--run-root <path>] [--run-id <id>]',
-    '  alloycat status --run <path>',
-    '  alloycat next --run <path>',
-    '  alloycat complete --run <path>',
+    '  alloycat init [agent-id] [--project <path>] [--run-id <id>]',
+    '  alloycat status [agent-id] [--project <path>] [--run <path>]',
+    '  alloycat remind [agent-id] [--project <path>] [--run <path>]',
+    '  alloycat next [agent-id] [--project <path>] [--run <path>]',
     '  alloycat validate'
   ].join('\n'));
-}
-
-function requireOption(options, key) {
-  if (!options[key]) {
-    throw new Error(`Missing required option: --${key.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`)}`);
-  }
-  return options[key];
 }
 
 function commandList() {
@@ -194,8 +145,7 @@ function printInstallResult(result, commandPrefix = defaultCommandPrefix) {
   console.log(`Gitignore: ${result.gitignoreStatus} .alloycat/`);
   console.log('');
   console.log('Next:');
-  console.log(`  ${commandPrefix} init ${result.agent.id} --project ${shellPathArg(result.projectRoot)}`);
-  console.log(`  ${commandPrefix} next --run <run-dir>`);
+  console.log(`  ${commandPrefix} init`);
 }
 
 function printUninstallResult(result) {
@@ -251,6 +201,65 @@ function resolveCommandProjectRoot(options) {
   return options.project ? resolve(options.project) : resolveProjectRoot();
 }
 
+function selectSingleInstalledAgentId(projectRoot, explicitAgentId, action) {
+  if (explicitAgentId) {
+    return explicitAgentId;
+  }
+
+  const installedAgents = listInstalledAgents(projectRoot);
+  if (installedAgents.length === 0) {
+    throw new Error(`No installed agents found in project: ${projectRoot}`);
+  }
+
+  if (installedAgents.length > 1) {
+    throw new Error(`Agent id is required for ${action} because multiple agents are installed: ${installedAgents.map((agent) => agent.id).join(', ')}`);
+  }
+
+  return installedAgents[0].id;
+}
+
+function listRunStatesForInstalledAgent(installedAgent) {
+  if (!installedAgent.runRoot || !existsSync(installedAgent.runRoot)) {
+    return [];
+  }
+
+  return readdirSync(installedAgent.runRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(installedAgent.runRoot, entry.name))
+    .filter((runDir) => existsSync(join(runDir, 'state.json')))
+    .map((runDir) => ({
+      runDir,
+      state: loadRunState(runDir),
+      mtimeMs: statSync(join(runDir, 'state.json')).mtimeMs
+    }));
+}
+
+function findActiveRuns(projectRoot, agentId) {
+  return listInstalledAgents(projectRoot)
+    .filter((agent) => !agentId || agent.id === agentId)
+    .flatMap(listRunStatesForInstalledAgent)
+    .filter((run) => run.state.status === 'running')
+    .sort((left, right) => right.mtimeMs - left.mtimeMs);
+}
+
+function resolveActiveRunDir(options, explicitAgentId, action) {
+  if (options.run) {
+    return resolve(options.run);
+  }
+
+  const projectRoot = resolveCommandProjectRoot(options);
+  const activeRuns = findActiveRuns(projectRoot, explicitAgentId);
+  if (activeRuns.length === 0) {
+    throw new Error(`No active runs found for ${action} in project: ${projectRoot}`);
+  }
+
+  if (activeRuns.length > 1) {
+    throw new Error(`Run is required for ${action} because multiple active runs exist: ${activeRuns.map((run) => run.runDir).join(', ')}`);
+  }
+
+  return activeRuns[0].runDir;
+}
+
 function printInstalledAgentChoices(installedAgents) {
   console.log('Select an installed agent to uninstall:');
   console.log('');
@@ -302,9 +311,10 @@ async function commandUninstall(agentId, options) {
 }
 
 function commandInit(agentId, options) {
-  const project = requireOption(options, 'project');
+  const project = resolveCommandProjectRoot(options);
+  const selectedAgentId = selectSingleInstalledAgentId(project, agentId, 'init');
   const run = createRun(repoRoot, {
-    agentId,
+    agentId: selectedAgentId,
     project,
     runRoot: options.runRoot,
     runId: options.runId
@@ -312,12 +322,11 @@ function commandInit(agentId, options) {
   console.log(`Initialized ${run.state.run_id}`);
   console.log(`Run directory: ${run.runDir}`);
   console.log('');
-  console.log('Next:');
-  console.log(`  ${defaultCommandPrefix} next --run ${shellPathArg(run.runDir)}`);
+  console.log(renderNextPrompt(repoRoot, run.runDir, { commandPrefix: defaultCommandPrefix }));
 }
 
-function commandStatus(options) {
-  const runDir = requireOption(options, 'run');
+function commandStatus(agentId, options) {
+  const runDir = resolveActiveRunDir(options, agentId, 'status');
   const state = loadRunState(runDir);
   console.log(`Run: ${state.run_id}`);
   console.log(`Agent: ${state.agent_id}`);
@@ -325,13 +334,13 @@ function commandStatus(options) {
   console.log(`Current phase: ${state.current_phase}`);
 }
 
-function commandNext(options) {
-  const runDir = requireOption(options, 'run');
-  console.log(renderNextPrompt(repoRoot, runDir));
+function commandRemind(agentId, options) {
+  const runDir = resolveActiveRunDir(options, agentId, 'remind');
+  console.log(renderNextPrompt(repoRoot, runDir, { commandPrefix: defaultCommandPrefix }));
 }
 
-function commandComplete(options) {
-  const runDir = requireOption(options, 'run');
+function commandNext(agentId, options) {
+  const runDir = resolveActiveRunDir(options, agentId, 'next');
   const result = completeRun(repoRoot, runDir);
 
   console.log(`Completed phase: ${result.completedPhase.id}`);
@@ -340,10 +349,11 @@ function commandComplete(options) {
     return;
   }
 
-  console.log(`Current phase: ${result.nextPhase.id}`);
   if (result.userGate) {
     console.log(`Workflow stopped at user confirmation gate: ${result.nextPhase.id}`);
   }
+  console.log('');
+  console.log(renderNextPrompt(repoRoot, runDir, { commandPrefix: defaultCommandPrefix }));
 }
 
 async function main() {
@@ -381,17 +391,17 @@ async function main() {
   }
 
   if (command === 'status') {
-    commandStatus(options);
+    commandStatus(positional[0], options);
+    return;
+  }
+
+  if (command === 'remind') {
+    commandRemind(positional[0], options);
     return;
   }
 
   if (command === 'next') {
-    commandNext(options);
-    return;
-  }
-
-  if (command === 'complete') {
-    commandComplete(options);
+    commandNext(positional[0], options);
     return;
   }
 

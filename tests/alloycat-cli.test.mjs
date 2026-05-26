@@ -40,8 +40,8 @@ test('install with an agent id writes linked install config without prompting', 
 
     assert.match(result.stdout, /Installed agent: interaction-audit/);
     assert.match(result.stdout, /Gitignore: added \.alloycat\//);
-    assert.match(result.stdout, /^  alloycat init interaction-audit /m);
-    assert.match(result.stdout, /^  alloycat next --run <run-dir>$/m);
+    assert.match(result.stdout, /^  alloycat init$/m);
+    assert.doesNotMatch(result.stdout, /--run <run-dir>/);
     assert.doesNotMatch(result.stdout, /npx @alloy\/alloycat/);
     assert.equal(config.agent_id, 'interaction-audit');
     assert.equal(config.mode, 'linked');
@@ -78,14 +78,15 @@ test('install from project root prints a copy-safe init command', () => {
     const result = runCli(['install', 'interaction-audit'], { cwd: tempRoot });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^  alloycat init interaction-audit --project \.$/m);
+    assert.match(result.stdout, /^  alloycat init$/m);
     assert.doesNotMatch(result.stdout, /--run-root/);
+    assert.doesNotMatch(result.stdout, /--project/);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
 });
 
-test('install prints PowerShell-safe quoted project paths when needed', () => {
+test('install prints the short init command for PowerShell projects with quoted paths', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-pwsh-'));
   try {
     const projectRoot = join(tempRoot, "John's App");
@@ -99,14 +100,14 @@ test('install prints PowerShell-safe quoted project paths when needed', () => {
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^  alloycat init interaction-audit --project '.*John''s App'$/m);
+    assert.match(result.stdout, /^  alloycat init$/m);
     assert.doesNotMatch(result.stdout, /'\\''/);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
 });
 
-test('install prints Git Bash-safe quoted project paths when needed', () => {
+test('install prints the short init command for Git Bash projects with quoted paths', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-bash-'));
   try {
     const projectRoot = join(tempRoot, "John's App");
@@ -120,7 +121,7 @@ test('install prints Git Bash-safe quoted project paths when needed', () => {
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^  alloycat init interaction-audit --project '.*John'\\''s App'$/m);
+    assert.match(result.stdout, /^  alloycat init$/m);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -252,43 +253,50 @@ test('uninstall without installed agents exits nonzero', () => {
   }
 });
 
-test('init, status, and next operate on a durable run folder', () => {
+test('init, status, remind, and next operate on the active installed run without run arguments', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-'));
   try {
+    mkdirSync(join(tempRoot, '.git'));
+    const install = runCli(['install', 'interaction-audit'], { cwd: tempRoot });
+    assert.equal(install.status, 0, install.stderr);
+
     const init = runCli([
       'init',
-      'interaction-audit',
-      '--project',
-      repoRoot,
-      '--run-root',
-      tempRoot,
       '--run-id',
       'cli-run'
-    ]);
+    ], { cwd: tempRoot });
     assert.equal(init.status, 0, init.stderr);
     assert.match(init.stdout, /cli-run/);
+    assert.match(init.stdout, /Phase: Resolve Project Root \(resolve-project-root\)/);
+    assert.match(init.stdout, /then run:\n  alloycat next/);
 
-    const runDir = join(tempRoot, 'cli-run');
-    const status = runCli(['status', '--run', runDir]);
+    const runDir = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs', 'cli-run');
+    const status = runCli(['status'], { cwd: tempRoot });
     assert.equal(status.status, 0, status.stderr);
     assert.match(status.stdout, /resolve-project-root/);
 
-    const next = runCli(['next', '--run', runDir]);
+    const remind = runCli(['remind'], { cwd: tempRoot });
+    assert.equal(remind.status, 0, remind.stderr);
+    assert.match(remind.stdout, /Phase: Resolve Project Root \(resolve-project-root\)/);
+
+    writeFileSync(join(runDir, '00-project-root.json'), '{}\n');
+    const next = runCli(['next'], { cwd: tempRoot });
     assert.equal(next.status, 0, next.stderr);
-    assert.match(next.stdout, /Phase: resolve-project-root/);
+    assert.match(next.stdout, /Completed phase: resolve-project-root/);
+    assert.match(next.stdout, /Phase: Project Discovery \(project-discovery\)/);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
 });
 
-test('init without run root writes under the target project and prints next command', () => {
+test('init without run root writes under the target project and prints the first task', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-init-default-root-'));
   try {
+    const install = runCli(['install', 'interaction-audit'], { cwd: tempRoot });
+    assert.equal(install.status, 0, install.stderr);
+
     const init = runCli([
       'init',
-      'interaction-audit',
-      '--project',
-      '.',
       '--run-id',
       'cli-default-root-run'
     ], { cwd: tempRoot });
@@ -297,69 +305,67 @@ test('init without run root writes under the target project and prints next comm
     const runDir = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs', 'cli-default-root-run');
 
     assert.equal(existsSync(join(runDir, 'state.json')), true);
-    assert.match(init.stdout, /^  alloycat next --run \.alloycat\/agents\/interaction-audit\/runs\/cli-default-root-run$/m);
+    assert.match(init.stdout, /Phase: Resolve Project Root \(resolve-project-root\)/);
+    assert.doesNotMatch(init.stdout, /--run/);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
 });
 
-test('complete advances a run and reports user confirmation gates', () => {
-  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-complete-'));
+test('next advances a run and reports user confirmation gates', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-complete-project-'));
   try {
+    const install = runCli(['install', 'interaction-audit'], { cwd: projectRoot });
+    assert.equal(install.status, 0, install.stderr);
+
     const init = runCli([
       'init',
-      'interaction-audit',
-      '--project',
-      repoRoot,
-      '--run-root',
-      tempRoot,
       '--run-id',
       'cli-complete-run'
-    ]);
+    ], { cwd: projectRoot });
     assert.equal(init.status, 0, init.stderr);
 
-    const runDir = join(tempRoot, 'cli-complete-run');
+    const runDir = join(projectRoot, '.alloycat', 'agents', 'interaction-audit', 'runs', 'cli-complete-run');
     writeFileSync(join(runDir, '00-project-root.json'), '{}\n');
-    let complete = runCli(['complete', '--run', runDir]);
-    assert.equal(complete.status, 0, complete.stderr);
-    assert.match(complete.stdout, /Completed phase: resolve-project-root/);
-    assert.match(complete.stdout, /Current phase: project-discovery/);
+    let next = runCli(['next'], { cwd: projectRoot });
+    assert.equal(next.status, 0, next.stderr);
+    assert.match(next.stdout, /Completed phase: resolve-project-root/);
+    assert.match(next.stdout, /Phase: Project Discovery \(project-discovery\)/);
 
     writeFileSync(join(runDir, '01-project-discovery.md'), '# Discovery\n');
     writeFileSync(join(runDir, '02-ui-inventory.json'), '{}\n');
-    complete = runCli(['complete', '--run', runDir]);
-    assert.equal(complete.status, 0, complete.stderr);
-    assert.match(complete.stdout, /Current phase: source-of-truth/);
+    next = runCli(['next'], { cwd: projectRoot });
+    assert.equal(next.status, 0, next.stderr);
+    assert.match(next.stdout, /Phase: Source of Truth \(source-of-truth\)/);
 
     writeFileSync(join(runDir, '03-source-of-truth-matrix.md'), '# Matrix\n');
-    complete = runCli(['complete', '--run', runDir]);
-    assert.equal(complete.status, 0, complete.stderr);
-    assert.match(complete.stdout, /Current phase: scope-confirmation/);
-    assert.match(complete.stdout, /Workflow stopped at user confirmation gate: scope-confirmation/);
+    next = runCli(['next'], { cwd: projectRoot });
+    assert.equal(next.status, 0, next.stderr);
+    assert.match(next.stdout, /Phase: Scope Confirmation \(scope-confirmation\)/);
+    assert.match(next.stdout, /Workflow stopped at user confirmation gate: scope-confirmation/);
+
   } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
+    rmSync(projectRoot, { recursive: true, force: true });
   }
 });
 
-test('complete exits nonzero when current phase outputs are missing', () => {
-  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-complete-missing-'));
+test('next exits nonzero when current phase outputs are missing', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-complete-missing-project-'));
   try {
+    const install = runCli(['install', 'interaction-audit'], { cwd: projectRoot });
+    assert.equal(install.status, 0, install.stderr);
+
     const init = runCli([
       'init',
-      'interaction-audit',
-      '--project',
-      repoRoot,
-      '--run-root',
-      tempRoot,
       '--run-id',
       'cli-missing-run'
-    ]);
+    ], { cwd: projectRoot });
     assert.equal(init.status, 0, init.stderr);
 
-    const complete = runCli(['complete', '--run', join(tempRoot, 'cli-missing-run')]);
-    assert.notEqual(complete.status, 0);
-    assert.match(complete.stderr, /Missing output artifacts for phase resolve-project-root/);
+    const next = runCli(['next'], { cwd: projectRoot });
+    assert.notEqual(next.status, 0);
+    assert.match(next.stderr, /Missing output artifacts for phase resolve-project-root/);
   } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
+    rmSync(projectRoot, { recursive: true, force: true });
   }
 });

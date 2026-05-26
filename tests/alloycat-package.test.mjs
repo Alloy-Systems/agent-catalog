@@ -80,7 +80,10 @@ test('packed alloycat package contains standalone catalog and runtime files', ()
   });
   assert.equal(parsedManifest.keywords.includes('agent-workflow'), true);
   assert.match(readme.stdout, /npx alloycat i/);
+  assert.match(readme.stdout, /npx alloycat next/);
+  assert.match(readme.stdout, /npx alloycat remind/);
   assert.match(readme.stdout, /npx alloycat uninstall/);
+  assert.doesNotMatch(readme.stdout, /complete/);
   assert.match(listing.stdout, /package\/package\.json/);
   assert.match(listing.stdout, /package\/src\/index\.js/);
   assert.match(listing.stdout, /package\/runtime\/index\.js/);
@@ -135,9 +138,9 @@ test('packed alloycat package installs into a target project through npx', () =>
     assert.equal(config.agent_id, 'interaction-audit');
     assert.equal(config.mode, 'linked');
     const commandPrefix = `npx ${npxPackageSpec(tarball)}`;
-    assert.equal(result.stdout.includes(`${commandPrefix} init interaction-audit --project .`), true);
+    assert.equal(result.stdout.includes(`${commandPrefix} init`), true);
     assert.equal(result.stdout.includes('--run-root'), false);
-    assert.equal(result.stdout.includes(`${commandPrefix} next --run <run-dir>`), true);
+    assert.equal(result.stdout.includes('--run <run-dir>'), false);
     assert.doesNotMatch(result.stdout, /npx --yes/);
     assert.equal(existsSync(join(targetRoot, '.alloycat', 'agents', 'interaction-audit', 'runs')), true);
     assert.equal(existsSync(join(targetRoot, '.agent-runs')), false);
@@ -237,9 +240,9 @@ test('packed alloycat package infers registry npx command prefix from lockfile',
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^  npx alloycat@0\.1\.0 init interaction-audit --project \.$/m);
+    assert.match(result.stdout, /^  npx alloycat@0\.1\.0 init$/m);
     assert.doesNotMatch(result.stdout, /--run-root/);
-    assert.match(result.stdout, /^  npx alloycat@0\.1\.0 next --run <run-dir>$/m);
+    assert.doesNotMatch(result.stdout, /--run <run-dir>/);
     assert.doesNotMatch(result.stdout, /npx --yes/);
   } finally {
     rmSync(cacheRoot, { recursive: true, force: true });

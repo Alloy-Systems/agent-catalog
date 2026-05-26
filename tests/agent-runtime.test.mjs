@@ -35,6 +35,22 @@ test('loads ordered workflow phases', () => {
   assert.equal(workflow.phases.at(-1).id, 'report-assembly');
 });
 
+test('loads human-readable phase metadata and output artifact contracts', () => {
+  const workflow = loadWorkflow(repoRoot, 'interaction-audit');
+  const phase = workflow.phases.find((candidate) => candidate.id === 'project-discovery');
+
+  assert.equal(phase.title, 'Project Discovery');
+  assert.match(phase.description, /Discover the target project type/);
+  assert.deepEqual(phase.outputs.map((artifact) => artifact.path), [
+    '01-project-discovery.md',
+    '02-ui-inventory.json'
+  ]);
+  assert.equal(phase.outputs[0].format, 'markdown');
+  assert.match(phase.outputs[0].description, /Discovery notes/);
+  assert.equal(phase.outputs[1].format, 'json');
+  assert.match(phase.outputs[1].description, /UI inventory/);
+});
+
 test('resolves project root by walking up to the nearest git directory', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-root-git-'));
   try {
@@ -234,7 +250,7 @@ test('creates run state for the first phase', () => {
   }
 });
 
-test('renders next phase prompt with exact artifact paths', () => {
+test('renders current phase prompt with phase metadata and artifact contracts', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-prompt-'));
   try {
     const run = createRun(repoRoot, {
@@ -246,9 +262,13 @@ test('renders next phase prompt with exact artifact paths', () => {
 
     const prompt = renderNextPrompt(repoRoot, run.runDir);
     assert.match(prompt, /You are executing Alloy Interaction Audit Agent/);
-    assert.match(prompt, /Phase: resolve-project-root/);
+    assert.match(prompt, /Phase: Resolve Project Root \(resolve-project-root\)/);
+    assert.match(prompt, /Goal: Identify the target project root/);
     assert.match(prompt, /Output artifacts/);
     assert.match(prompt, /00-project-root\.json/);
+    assert.match(prompt, /Format: json/);
+    assert.match(prompt, /then run:/);
+    assert.match(prompt, /alloycat next/);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -267,6 +287,26 @@ test('complete requires current phase output artifacts before advancing', () => 
     assert.throws(
       () => completeRun(repoRoot, run.runDir),
       /Missing output artifacts for phase resolve-project-root: .*00-project-root\.json/
+    );
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('complete validates json output artifacts before advancing', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-complete-invalid-json-'));
+  try {
+    const run = createRun(repoRoot, {
+      agentId: 'interaction-audit',
+      project: repoRoot,
+      runRoot: tempRoot,
+      runId: 'invalid-json-run'
+    });
+    writeFileSync(join(run.runDir, '00-project-root.json'), '{not json}\n');
+
+    assert.throws(
+      () => completeRun(repoRoot, run.runDir),
+      /Invalid JSON output artifact for phase resolve-project-root: .*00-project-root\.json/
     );
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });

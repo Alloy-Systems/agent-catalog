@@ -11,12 +11,45 @@ function parseList(lines, startIndex) {
   let index = startIndex + 1;
 
   while (index < lines.length) {
-    const item = lines[index].match(/^\s+-\s+(.+)$/);
+    const item = lines[index].match(/^(\s*)-\s+(.+)$/);
     if (!item) {
       break;
     }
-    values.push(cleanValue(item[1]));
+
+    const [, itemIndent, rawItem] = item;
+    const objectStart = rawItem.match(/^([a-z_]+):\s*(.*)$/);
+    if (!objectStart) {
+      values.push(cleanValue(rawItem));
+      index += 1;
+      continue;
+    }
+
+    const objectValue = {
+      [objectStart[1]]: cleanValue(objectStart[2])
+    };
     index += 1;
+
+    while (index < lines.length) {
+      const nextItem = lines[index].match(/^(\s*)-\s+(.+)$/);
+      if (nextItem && nextItem[1].length === itemIndent.length) {
+        break;
+      }
+
+      const property = lines[index].match(/^(\s+)([a-z_]+):\s*(.*)$/);
+      if (!property) {
+        break;
+      }
+
+      const [, propertyIndent, key, rawValue] = property;
+      if (propertyIndent.length <= itemIndent.length) {
+        break;
+      }
+
+      objectValue[key] = rawValue === 'true' ? true : cleanValue(rawValue);
+      index += 1;
+    }
+
+    values.push(objectValue);
   }
 
   return { values, nextIndex: index - 1 };

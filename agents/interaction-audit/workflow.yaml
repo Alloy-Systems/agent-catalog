@@ -5,46 +5,70 @@ workflow:
 
 phases:
   - id: resolve-project-root
+    title: Resolve Project Root
+    description: Identify the target project root before audit work begins.
     prompt: prompts/00-resolve-project-root.md
     outputs:
-      - 00-project-root.json
+      - path: 00-project-root.json
+        format: json
+        description: Resolved project root metadata and confidence.
 
   - id: project-discovery
+    title: Project Discovery
+    description: Discover the target project type, UI surfaces, runtime entrypoints, project instructions, tests, data sources, and fixtures.
     prompt: prompts/01-project-discovery.md
     inputs:
       - 00-project-root.json
     outputs:
-      - 01-project-discovery.md
-      - 02-ui-inventory.json
+      - path: 01-project-discovery.md
+        format: markdown
+        description: Discovery notes with project type, entrypoints, instructions, tests, e2e structure, data sources, and fixtures.
+      - path: 02-ui-inventory.json
+        format: json
+        description: Structured UI inventory with screens, selectors, source files, and e2e coverage.
 
   - id: source-of-truth
+    title: Source of Truth
+    description: Rank authoritative project, design, runtime, and test sources before audit findings are produced.
     prompt: prompts/02-source-of-truth.md
     inputs:
       - 01-project-discovery.md
       - 02-ui-inventory.json
     outputs:
-      - 03-source-of-truth-matrix.md
+      - path: 03-source-of-truth-matrix.md
+        format: markdown
+        description: Matrix of source-of-truth documents, their authority, coverage area, and conflict resolution notes.
 
   - id: scope-confirmation
+    title: Scope Confirmation
+    description: Confirm the audit scope with the user before branch planning and audit execution.
     prompt: prompts/03-scope-confirmation.md
     inputs:
       - 01-project-discovery.md
       - 02-ui-inventory.json
       - 03-source-of-truth-matrix.md
     outputs:
-      - 04-confirmed-scope.md
+      - path: 04-confirmed-scope.md
+        format: markdown
+        description: User-confirmed audit scope and exclusions.
     user_gate: true
 
   - id: branch-planning
+    title: Branch Planning
+    description: Decide which audit branches should run from the confirmed scope.
     prompt: prompts/04-branch-planning.md
     inputs:
       - 04-confirmed-scope.md
       - 03-source-of-truth-matrix.md
       - 02-ui-inventory.json
     outputs:
-      - 05-branch-plan.json
+      - path: 05-branch-plan.json
+        format: json
+        description: Branch execution plan with audit branch flags and rationale.
 
   - id: interaction-audit
+    title: Interaction Audit
+    description: Audit visible UI behavior against the confirmed scope and UI inventory.
     prompt: prompts/05A-interaction-audit.md
     branch_key: run_interaction_audit
     inputs:
@@ -52,9 +76,13 @@ phases:
       - 05-branch-plan.json
       - 02-ui-inventory.json
     outputs:
-      - 06A-interaction-findings.md
+      - path: 06A-interaction-findings.md
+        format: markdown
+        description: Interaction behavior findings with evidence and severity.
 
   - id: visual-conformance-audit
+    title: Visual Conformance Audit
+    description: Audit visual conformance against the authoritative design sources.
     prompt: prompts/05B-visual-conformance-audit.md
     branch_key: run_visual_conformance_audit
     inputs:
@@ -62,21 +90,31 @@ phases:
       - 05-branch-plan.json
       - 03-source-of-truth-matrix.md
     outputs:
-      - 06B-visual-findings.md
+      - path: 06B-visual-findings.md
+        format: markdown
+        description: Visual conformance findings with source references and evidence.
 
   - id: e2e-coverage-audit
+    title: E2E Coverage Audit
+    description: Audit whether user-visible screens and flows have real e2e coverage.
     prompt: prompts/05C-e2e-coverage-audit.md
     branch_key: run_e2e_coverage_audit
     inputs:
       - 04-confirmed-scope.md
       - 05-branch-plan.json
     outputs:
-      - 06C-e2e-coverage.md
+      - path: 06C-e2e-coverage.md
+        format: markdown
+        description: E2E coverage findings with covered and missing screen behavior.
 
   - id: report-assembly
+    title: Report Assembly
+    description: Assemble final audit findings from completed branch outputs.
     prompt: prompts/06-report-assembly.md
     inputs:
       - 04-confirmed-scope.md
       - 05-branch-plan.json
     outputs:
-      - 07-final-report.md
+      - path: 07-final-report.md
+        format: markdown
+        description: Final interaction audit report.

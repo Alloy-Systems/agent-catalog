@@ -85,9 +85,9 @@ Command-line runner for Alloy agent workflow packages.
 
 \`\`\`sh
 npx alloycat i
-npx alloycat init interaction-audit --project .
-npx alloycat next --run <run-dir>
-npx alloycat complete --run <run-dir>
+npx alloycat init
+npx alloycat next
+npx alloycat remind
 npx alloycat uninstall
 \`\`\`
 
@@ -204,11 +204,7 @@ function validatePackagedCatalog(catalogRoot) {
 
 function writePackagedEntrypoint() {
   const source = readFileSync(join(packageRoot, 'src', 'index.js'), 'utf8');
-  let patched = replaceRequired(
-    source,
-    "import { readFileSync } from 'node:fs';",
-    "import { existsSync, readFileSync, statSync } from 'node:fs';"
-  );
+  let patched = source;
   patched = replaceRequired(
     patched,
     "from '../../agent-runtime/src/index.js';",

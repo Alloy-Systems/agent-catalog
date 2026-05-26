@@ -65,8 +65,37 @@ function findCurrentPhase(workflow, state) {
   return { phase: workflow.phases[phaseIndex], phaseIndex };
 }
 
+function artifactPath(artifact) {
+  return typeof artifact === 'string' ? artifact : artifact.path;
+}
+
+function artifactFormat(artifact) {
+  if (typeof artifact === 'object' && artifact.format) {
+    return artifact.format;
+  }
+
+  return artifactPath(artifact).endsWith('.json') ? 'json' : null;
+}
+
 function missingOutputArtifacts(runDir, phase) {
-  return phase.outputs.filter((artifact) => !existsSync(join(runDir, artifact)));
+  return phase.outputs
+    .map(artifactPath)
+    .filter((artifact) => !existsSync(join(runDir, artifact)));
+}
+
+function validateOutputArtifacts(runDir, phase) {
+  for (const artifact of phase.outputs) {
+    const path = artifactPath(artifact);
+    if (artifactFormat(artifact) !== 'json') {
+      continue;
+    }
+
+    try {
+      JSON.parse(readFileSync(join(runDir, path), 'utf8'));
+    } catch (error) {
+      throw new Error(`Invalid JSON output artifact for phase ${phase.id}: ${path}`);
+    }
+  }
 }
 
 export function completeRun(repoRoot, runDir) {
@@ -78,6 +107,7 @@ export function completeRun(repoRoot, runDir) {
   if (missingArtifacts.length > 0) {
     throw new Error(`Missing output artifacts for phase ${phase.id}: ${missingArtifacts.join(', ')}`);
   }
+  validateOutputArtifacts(runDir, phase);
 
   const completedPhases = state.completed_phases.includes(phase.id)
     ? state.completed_phases
