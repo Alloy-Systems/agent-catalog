@@ -77,21 +77,21 @@ function writePackageJson() {
 }
 
 function writePackageReadme() {
-  const readme = `# @alloy/cat
+  const readme = `# alloycat
 
 Command-line runner for Alloy agent workflow packages.
 
 ## Usage
 
 \`\`\`sh
-npx @alloy/cat i
-npx @alloy/cat init interaction-audit --project .
-npx @alloy/cat next --run <run-dir>
-npx @alloy/cat complete --run <run-dir>
-npx @alloy/cat uninstall
+npx alloycat i
+npx alloycat init interaction-audit --project .
+npx alloycat next --run <run-dir>
+npx alloycat complete --run <run-dir>
+npx alloycat uninstall
 \`\`\`
 
-The installer writes project-local agent state under \`.alloycat/\` and updates \`.gitignore\` for that directory. Run \`npx @alloy/cat uninstall\` from the target project to remove an installed agent.
+The installer writes project-local agent state under \`.alloycat/\` and updates \`.gitignore\` for that directory. Run \`npx alloycat uninstall\` from the target project to remove an installed agent.
 `;
 
   writeFileSync(join(stageRoot, 'README.md'), readme);

@@ -14,6 +14,8 @@ test('publish workflow uses npm trusted publishing without long-lived tokens', (
   assert.match(workflow, /actions\/setup-node@v6/);
   assert.match(workflow, /node-version:\s*['"]24['"]/);
   assert.match(workflow, /package-manager-cache:\s*false/);
+  assert.match(workflow, /name:\s*Publish alloycat/);
+  assert.match(workflow, /name:\s*Pack alloycat/);
   assert.match(workflow, /ALLOYCAT_PACKAGE_REPOSITORY_URL:\s*git\+https:\/\/github\.com\/\$\{\{\s*github\.repository\s*\}\}\.git/);
   assert.match(workflow, /working-directory:\s*packages\/alloycat\/dist-package/);
   assert.match(workflow, /npm publish --access public/);

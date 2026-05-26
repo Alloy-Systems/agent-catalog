@@ -1,5 +1,5 @@
 {
-  "name": "@alloy/cat",
+  "name": "alloycat",
   "version": "0.1.0",
   "private": true,
   "type": "module",

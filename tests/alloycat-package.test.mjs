@@ -69,7 +69,7 @@ test('packed alloycat package contains standalone catalog and runtime files', ()
   assert.equal(readme.status, 0, readme.stderr);
   const parsedManifest = JSON.parse(manifest.stdout);
   const sourceManifest = JSON.parse(readFileSync(join(repoRoot, 'packages', 'alloycat', 'package.json'), 'utf8'));
-  assert.equal(parsedManifest.name, '@alloy/cat');
+  assert.equal(parsedManifest.name, 'alloycat');
   assert.equal(parsedManifest.version, sourceManifest.version);
   assert.equal(parsedManifest.description, 'Command-line runner for Alloy agent workflow packages.');
   assert.equal(parsedManifest.license, 'UNLICENSED');
@@ -79,8 +79,8 @@ test('packed alloycat package contains standalone catalog and runtime files', ()
     cat: 'src/index.js'
   });
   assert.equal(parsedManifest.keywords.includes('agent-workflow'), true);
-  assert.match(readme.stdout, /npx @alloy\/cat i/);
-  assert.match(readme.stdout, /npx @alloy\/cat uninstall/);
+  assert.match(readme.stdout, /npx alloycat i/);
+  assert.match(readme.stdout, /npx alloycat uninstall/);
   assert.match(listing.stdout, /package\/package\.json/);
   assert.match(listing.stdout, /package\/src\/index\.js/);
   assert.match(listing.stdout, /package\/runtime\/index\.js/);
@@ -212,12 +212,12 @@ test('packed alloycat package infers registry npx command prefix from lockfile',
       packages: {
         '': {
           dependencies: {
-            '@alloy/cat': '^0.1.0'
+            alloycat: '^0.1.0'
           }
         },
-        'node_modules/@alloy/cat': {
+        'node_modules/alloycat': {
           version: '0.1.0',
-          resolved: 'https://registry.npmjs.org/@alloy/cat/-/cat-0.1.0.tgz',
+          resolved: 'https://registry.npmjs.org/alloycat/-/alloycat-0.1.0.tgz',
           bin: {
             alloycat: 'src/index.js'
           }
@@ -237,9 +237,9 @@ test('packed alloycat package infers registry npx command prefix from lockfile',
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^  npx @alloy\/cat@0\.1\.0 init interaction-audit --project \.$/m);
+    assert.match(result.stdout, /^  npx alloycat@0\.1\.0 init interaction-audit --project \.$/m);
     assert.doesNotMatch(result.stdout, /--run-root/);
-    assert.match(result.stdout, /^  npx @alloy\/cat@0\.1\.0 next --run <run-dir>$/m);
+    assert.match(result.stdout, /^  npx alloycat@0\.1\.0 next --run <run-dir>$/m);
     assert.doesNotMatch(result.stdout, /npx --yes/);
   } finally {
     rmSync(cacheRoot, { recursive: true, force: true });

@@ -1,4 +1,4 @@
-name: Publish @alloy/cat
+name: Publish alloycat
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   publish:
-    name: Publish @alloy/cat
+    name: Publish alloycat
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,11 +39,11 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Pack @alloy/cat
+      - name: Pack alloycat
         run: npm run pack:alloycat
         env:
           ALLOYCAT_PACKAGE_REPOSITORY_URL: git+https://github.com/${{ github.repository }}.git
 
-      - name: Publish @alloy/cat
+      - name: Publish alloycat
         working-directory: packages/alloycat/dist-package
         run: npm publish --access public
