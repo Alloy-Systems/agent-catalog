@@ -103,10 +103,11 @@ test('packed alloycat package installs into a target project through npx', () =>
 
     assert.equal(config.agent_id, 'interaction-audit');
     assert.equal(config.mode, 'linked');
-    const commandPrefix = `npx --yes ${npxPackageSpec(tarball)}`;
+    const commandPrefix = `npx ${npxPackageSpec(tarball)}`;
     assert.equal(result.stdout.includes(`${commandPrefix} init interaction-audit --project .`), true);
     assert.equal(result.stdout.includes('--run-root'), false);
     assert.equal(result.stdout.includes(`${commandPrefix} next --run <run-dir>`), true);
+    assert.doesNotMatch(result.stdout, /npx --yes/);
     assert.equal(existsSync(join(targetRoot, '.alloycat', 'agents', 'interaction-audit', 'runs')), true);
     assert.equal(existsSync(join(targetRoot, '.agent-runs')), false);
     assert.match(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
@@ -205,9 +206,10 @@ test('packed alloycat package infers registry npx command prefix from lockfile',
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^  npx --yes @alloy\/cat@0\.1\.0 init interaction-audit --project \.$/m);
+    assert.match(result.stdout, /^  npx @alloy\/cat@0\.1\.0 init interaction-audit --project \.$/m);
     assert.doesNotMatch(result.stdout, /--run-root/);
-    assert.match(result.stdout, /^  npx --yes @alloy\/cat@0\.1\.0 next --run <run-dir>$/m);
+    assert.match(result.stdout, /^  npx @alloy\/cat@0\.1\.0 next --run <run-dir>$/m);
+    assert.doesNotMatch(result.stdout, /npx --yes/);
   } finally {
     rmSync(cacheRoot, { recursive: true, force: true });
     rmSync(targetRoot, { recursive: true, force: true });

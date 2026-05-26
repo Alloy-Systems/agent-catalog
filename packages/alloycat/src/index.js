@@ -84,7 +84,7 @@ function resolveDefaultCommandPrefix() {
   const envPackage = process.env.npm_config_package?.trim();
   const npxPackage = envPackage || inferNpxPackageSpec(entrypointPath);
   if (process.env.npm_lifecycle_event === 'npx' && npxPackage) {
-    return `npx --yes ${npxPackage}`;
+    return `npx ${npxPackage}`;
   }
 
   return 'alloycat';
