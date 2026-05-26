@@ -60,8 +60,11 @@ function npxPackageSpec(tarball) {
 test('packed alloycat package contains standalone catalog and runtime files', () => {
   const tarball = packAlloycat();
   const listing = run('tar', ['-tf', relative(repoRoot, tarball)]);
+  const manifest = run('tar', ['-xOf', relative(repoRoot, tarball), 'package/package.json']);
 
   assert.equal(listing.status, 0, listing.stderr);
+  assert.equal(manifest.status, 0, manifest.stderr);
+  assert.equal(JSON.parse(manifest.stdout).name, '@alloy/cat');
   assert.match(listing.stdout, /package\/package\.json/);
   assert.match(listing.stdout, /package\/src\/index\.js/);
   assert.match(listing.stdout, /package\/runtime\/index\.js/);
@@ -120,13 +123,32 @@ test('packed alloycat package installs into a target project through npx', () =>
   }
 });
 
+test('packed alloycat package installs with the i alias through npx', () => {
+  const tarball = packAlloycat();
+  const targetRoot = mkdtempSync(join(tmpdir(), 'alloycat-packed-alias-target-'));
+  try {
+    const result = run('npx', ['--yes', npxPackageSpec(tarball), 'i', 'interaction-audit'], {
+      cwd: targetRoot
+    });
+    assert.equal(result.status, 0, result.stderr);
+
+    const configPath = join(targetRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+
+    assert.equal(config.agent_id, 'interaction-audit');
+    assert.equal(config.mode, 'linked');
+  } finally {
+    rmSync(targetRoot, { recursive: true, force: true });
+  }
+});
+
 test('packed alloycat package infers registry npx command prefix from lockfile', () => {
   packAlloycat();
   const cacheRoot = mkdtempSync(join(tmpdir(), 'alloycat-npx-cache-'));
   const targetRoot = mkdtempSync(join(tmpdir(), 'alloycat-packed-registry-target-'));
   try {
     const npxRoot = join(cacheRoot, '_npx', 'registry-run');
-    const packageRoot = join(npxRoot, 'node_modules', '@alloy', 'alloycat');
+    const packageRoot = join(npxRoot, 'node_modules', '@alloy', 'cat');
 
     mkdirSync(dirname(packageRoot), { recursive: true });
     cpSync(join(repoRoot, 'packages', 'alloycat', 'dist-package'), packageRoot, { recursive: true });
@@ -135,12 +157,12 @@ test('packed alloycat package infers registry npx command prefix from lockfile',
       packages: {
         '': {
           dependencies: {
-            '@alloy/alloycat': '^0.1.0'
+            '@alloy/cat': '^0.1.0'
           }
         },
-        'node_modules/@alloy/alloycat': {
+        'node_modules/@alloy/cat': {
           version: '0.1.0',
-          resolved: 'https://registry.npmjs.org/@alloy/alloycat/-/alloycat-0.1.0.tgz',
+          resolved: 'https://registry.npmjs.org/@alloy/cat/-/cat-0.1.0.tgz',
           bin: {
             alloycat: 'src/index.js'
           }
@@ -160,9 +182,9 @@ test('packed alloycat package infers registry npx command prefix from lockfile',
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^  npx --yes @alloy\/alloycat@0\.1\.0 init interaction-audit --project \.$/m);
+    assert.match(result.stdout, /^  npx --yes @alloy\/cat@0\.1\.0 init interaction-audit --project \.$/m);
     assert.doesNotMatch(result.stdout, /--run-root/);
-    assert.match(result.stdout, /^  npx --yes @alloy\/alloycat@0\.1\.0 next --run <run-dir>$/m);
+    assert.match(result.stdout, /^  npx --yes @alloy\/cat@0\.1\.0 next --run <run-dir>$/m);
   } finally {
     rmSync(cacheRoot, { recursive: true, force: true });
     rmSync(targetRoot, { recursive: true, force: true });

@@ -155,6 +155,7 @@ function printUsage() {
     '  alloycat list',
     '  alloycat info <agent-id>',
     '  alloycat install [agent-id] [--project <path>] [--mode linked]',
+    '  alloycat i [agent-id] [--project <path>] [--mode linked]',
     '  alloycat init <agent-id> --project <path> [--run-root <path>] [--run-id <id>]',
     '  alloycat status --run <path>',
     '  alloycat next --run <path>',
@@ -309,7 +310,7 @@ async function main() {
     return;
   }
 
-  if (command === 'install') {
+  if (command === 'install' || command === 'i') {
     await commandInstall(positional[0], options);
     return;
   }

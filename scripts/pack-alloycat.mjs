@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageRoot = join(repoRoot, 'packages', 'alloycat');
 const stageRoot = join(packageRoot, 'dist-package');
-const tarballName = 'alloy-alloycat-0.1.0.tgz';
+const tarballName = 'alloy-cat-0.1.0.tgz';
 const tarballPath = join(packageRoot, tarballName);
 
 function copyRequiredFile(from, to) {
@@ -34,7 +34,7 @@ function copyRequiredDir(from, to) {
 
 function writePackageJson() {
   const manifest = {
-    name: '@alloy/alloycat',
+    name: '@alloy/cat',
     version: '0.1.0',
     type: 'module',
     bin: {

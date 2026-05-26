@@ -54,6 +54,22 @@ test('install with an agent id writes linked install config without prompting', 
   }
 });
 
+test('i alias installs an agent like install', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-alias-'));
+  try {
+    const result = runCli(['i', 'interaction-audit', '--project', tempRoot]);
+    assert.equal(result.status, 0, result.stderr);
+
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+
+    assert.match(result.stdout, /Installed agent: interaction-audit/);
+    assert.equal(config.agent_id, 'interaction-audit');
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('install from project root prints a copy-safe init command', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-copy-safe-'));
   try {
