@@ -6,7 +6,7 @@ import {
   rmSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -91,8 +91,13 @@ test('packed alloycat package installs into a target project through npx', () =>
     assert.equal(config.mode, 'linked');
     assert.equal(existsSync(join(targetRoot, '.agent-runs', 'interaction-audit')), true);
     assert.match(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
-    assert.equal(basename(config.catalog_root), 'catalog');
-    assert.notEqual(config.catalog_root, repoRoot);
+    const catalogRoot = resolve(config.catalog_root);
+    const sourceCatalogRoot = join(repoRoot, 'catalog');
+    const relativeToRepo = relative(repoRoot, catalogRoot);
+
+    assert.equal(basename(catalogRoot), 'catalog');
+    assert.notEqual(catalogRoot, sourceCatalogRoot);
+    assert.equal(relativeToRepo.startsWith('..') || isAbsolute(relativeToRepo), true);
   } finally {
     rmSync(targetRoot, { recursive: true, force: true });
   }
