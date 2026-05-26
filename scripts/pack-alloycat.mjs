@@ -36,12 +36,24 @@ function writePackageJson() {
   const manifest = {
     name: '@alloy/cat',
     version: '0.1.0',
+    description: 'Command-line runner for Alloy agent workflow packages.',
+    license: 'UNLICENSED',
     type: 'module',
     bin: {
-      alloycat: './src/index.js'
+      alloycat: 'src/index.js',
+      cat: 'src/index.js'
     },
     engines: {
       node: '>=20'
+    },
+    keywords: [
+      'alloy',
+      'agent-workflow',
+      'workflow-runner',
+      'cli'
+    ],
+    publishConfig: {
+      access: 'public'
     },
     files: [
       'src/',
@@ -53,6 +65,27 @@ function writePackageJson() {
   };
 
   writeFileSync(join(stageRoot, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+function writePackageReadme() {
+  const readme = `# @alloy/cat
+
+Command-line runner for Alloy agent workflow packages.
+
+## Usage
+
+\`\`\`sh
+npx @alloy/cat i
+npx @alloy/cat init interaction-audit --project .
+npx @alloy/cat next --run <run-dir>
+npx @alloy/cat complete --run <run-dir>
+npx @alloy/cat uninstall
+\`\`\`
+
+The installer writes project-local agent state under \`.alloycat/\` and updates \`.gitignore\` for that directory. Run \`npx @alloy/cat uninstall\` from the target project to remove an installed agent.
+`;
+
+  writeFileSync(join(stageRoot, 'README.md'), readme);
 }
 
 function replaceRequired(source, search, replacement) {
@@ -232,7 +265,7 @@ rmSync(tarballPath, { force: true, maxRetries: 5, retryDelay: 100 });
 mkdirSync(stageRoot, { recursive: true });
 
 writePackageJson();
-writeFileSync(join(stageRoot, 'README.md'), '# Alloycat\n\nCommand-line runner for Alloy agent packages.\n');
+writePackageReadme();
 writePackagedEntrypoint();
 copyRequiredDir(join(repoRoot, 'packages', 'agent-runtime', 'src'), join(stageRoot, 'runtime'));
 copyRequiredFile(join(repoRoot, 'catalog.yaml'), join(stageRoot, 'catalog', 'catalog.yaml'));

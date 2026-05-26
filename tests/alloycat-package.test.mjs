@@ -61,10 +61,23 @@ test('packed alloycat package contains standalone catalog and runtime files', ()
   const tarball = packAlloycat();
   const listing = run('tar', ['-tf', relative(repoRoot, tarball)]);
   const manifest = run('tar', ['-xOf', relative(repoRoot, tarball), 'package/package.json']);
+  const readme = run('tar', ['-xOf', relative(repoRoot, tarball), 'package/README.md']);
 
   assert.equal(listing.status, 0, listing.stderr);
   assert.equal(manifest.status, 0, manifest.stderr);
-  assert.equal(JSON.parse(manifest.stdout).name, '@alloy/cat');
+  assert.equal(readme.status, 0, readme.stderr);
+  const parsedManifest = JSON.parse(manifest.stdout);
+  assert.equal(parsedManifest.name, '@alloy/cat');
+  assert.equal(parsedManifest.description, 'Command-line runner for Alloy agent workflow packages.');
+  assert.equal(parsedManifest.license, 'UNLICENSED');
+  assert.equal(parsedManifest.publishConfig.access, 'public');
+  assert.deepEqual(parsedManifest.bin, {
+    alloycat: 'src/index.js',
+    cat: 'src/index.js'
+  });
+  assert.equal(parsedManifest.keywords.includes('agent-workflow'), true);
+  assert.match(readme.stdout, /npx @alloy\/cat i/);
+  assert.match(readme.stdout, /npx @alloy\/cat uninstall/);
   assert.match(listing.stdout, /package\/package\.json/);
   assert.match(listing.stdout, /package\/src\/index\.js/);
   assert.match(listing.stdout, /package\/runtime\/index\.js/);
