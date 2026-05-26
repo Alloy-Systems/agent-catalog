@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import {
   completeRun,
@@ -75,13 +77,52 @@ function printInstallResult(result) {
   console.log('  alloycat next --run <run-dir>');
 }
 
-async function commandInstall(agentId, options) {
-  if (!agentId) {
+function printAgentChoices(catalog) {
+  console.log('Select an agent to install:');
+  console.log('');
+  catalog.agents.forEach((agent, index) => {
+    console.log(`${index + 1}. ${agent.id}\t${agent.status}\t${agent.description}`);
+  });
+  console.log('');
+}
+
+async function readSelection() {
+  if (process.stdin.isTTY) {
+    const readline = createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    try {
+      return await readline.question('Enter number: ');
+    } finally {
+      readline.close();
+    }
+  }
+
+  return readFileSync(0, 'utf8').split(/\r?\n/)[0] ?? '';
+}
+
+async function selectAgentId() {
+  const catalog = loadCatalog(repoRoot);
+  printAgentChoices(catalog);
+
+  const rawSelection = (await readSelection()).trim();
+  if (!rawSelection) {
     throw new Error('Agent id is required when running non-interactively. Run: alloycat install <agent-id>');
   }
 
+  const selection = Number(rawSelection);
+  if (!Number.isInteger(selection) || selection < 1 || selection > catalog.agents.length) {
+    throw new Error(`Invalid agent selection: ${rawSelection}`);
+  }
+
+  return catalog.agents[selection - 1].id;
+}
+
+async function commandInstall(agentId, options) {
+  const selectedAgentId = agentId ?? await selectAgentId();
   const result = installAgent(repoRoot, {
-    agentId,
+    agentId: selectedAgentId,
     project: options.project,
     mode: options.mode
   });

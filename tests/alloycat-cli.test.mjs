@@ -32,10 +32,11 @@ test('install with an agent id writes linked install config without prompting', 
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-direct-'));
   try {
     const result = runCli(['install', 'interaction-audit', '--project', tempRoot]);
+    assert.equal(result.status, 0, result.stderr);
+
     const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
-    assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Installed agent: interaction-audit/);
     assert.match(result.stdout, /Gitignore: added \.agent-runs\//);
     assert.match(result.stdout, /alloycat init interaction-audit/);
@@ -43,6 +44,36 @@ test('install with an agent id writes linked install config without prompting', 
     assert.equal(config.mode, 'linked');
     assert.equal(existsSync(join(tempRoot, '.agent-runs', 'interaction-audit')), true);
     assert.match(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('install without an agent id accepts a numbered selection from stdin', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-select-'));
+  try {
+    const result = runCli(['install', '--project', tempRoot], { input: '1\n' });
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Select an agent to install:/);
+    assert.match(result.stdout, /1\. interaction-audit/);
+    assert.match(result.stdout, /Installed agent: interaction-audit/);
+    assert.equal(config.agent_id, 'interaction-audit');
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('install without an agent id exits nonzero when no selection is provided', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-missing-selection-'));
+  try {
+    const result = runCli(['install', '--project', tempRoot], { input: '' });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Agent id is required when running non-interactively/);
+    assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
