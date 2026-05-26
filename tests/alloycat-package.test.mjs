@@ -75,6 +75,14 @@ test('packed alloycat package can list agents through npx', () => {
   assert.match(result.stdout, /interaction-audit/);
 });
 
+test('packed alloycat package can validate the packaged catalog through npx', () => {
+  const tarball = packAlloycat();
+  const result = run('npx', ['--yes', npxPackageSpec(tarball), 'validate']);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Validated 1 agent\./);
+});
+
 test('packed alloycat package installs into a target project through npx', () => {
   const tarball = packAlloycat();
   const targetRoot = mkdtempSync(join(tmpdir(), 'alloycat-packed-target-'));

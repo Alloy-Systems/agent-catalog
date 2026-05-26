@@ -55,17 +55,139 @@ function writePackageJson() {
   writeFileSync(join(stageRoot, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
+function replaceRequired(source, search, replacement) {
+  if (!source.includes(search)) {
+    throw new Error(`Expected source string was not found: ${search}`);
+  }
+  return source.replace(search, replacement);
+}
+
+function validateStagedEntrypoint(source) {
+  const requiredStrings = [
+    "from '../runtime/index.js';",
+    "const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../catalog');"
+  ];
+  const forbiddenStrings = [
+    '../../agent-runtime/src/index.js',
+    '../../../scripts/validate-catalog.mjs'
+  ];
+
+  for (const requiredString of requiredStrings) {
+    if (!source.includes(requiredString)) {
+      throw new Error(`Staged entrypoint is missing required string: ${requiredString}`);
+    }
+  }
+
+  for (const forbiddenString of forbiddenStrings) {
+    if (source.includes(forbiddenString)) {
+      throw new Error(`Staged entrypoint contains source-only string: ${forbiddenString}`);
+    }
+  }
+}
+
+function packagedValidateSource() {
+  return `
+function failValidation(message) {
+  console.error(message);
+  process.exitCode = 1;
+}
+
+function requirePackagedFile(catalogRoot, path) {
+  const fullPath = resolve(catalogRoot, path);
+  if (!existsSync(fullPath) || !statSync(fullPath).isFile()) {
+    failValidation(\`Missing required file: \${path}\`);
+  }
+}
+
+function requirePackagedDirectory(catalogRoot, path) {
+  const fullPath = resolve(catalogRoot, path);
+  if (!existsSync(fullPath) || !statSync(fullPath).isDirectory()) {
+    failValidation(\`Missing required directory: \${path}\`);
+  }
+}
+
+function extractPackagedAgentEntries(catalogText) {
+  const entries = [];
+  const blocks = catalogText.split(/\\n\\s*-\\s+id:\\s+/).slice(1);
+
+  for (const block of blocks) {
+    const id = block.split(/\\r?\\n/, 1)[0]?.trim();
+    const path = block.match(/\\n\\s+path:\\s+(.+)/)?.[1]?.trim();
+    const status = block.match(/\\n\\s+status:\\s+(.+)/)?.[1]?.trim();
+    const version = block.match(/\\n\\s+version:\\s+(.+)/)?.[1]?.trim();
+    if (id && path && status && version) {
+      entries.push({ id, path, status, version });
+    }
+  }
+
+  return entries;
+}
+
+function extractPackagedPromptPaths(workflowText) {
+  return [...workflowText.matchAll(/\\n\\s+prompt:\\s+(.+)/g)].map((match) => match[1].trim());
+}
+
+function validatePackagedCatalog(catalogRoot) {
+  requirePackagedFile(catalogRoot, 'catalog.yaml');
+
+  const catalogText = readFileSync(resolve(catalogRoot, 'catalog.yaml'), 'utf8');
+  const agents = extractPackagedAgentEntries(catalogText);
+
+  if (agents.length === 0) {
+    failValidation('catalog.yaml must list at least one agent.');
+  }
+
+  for (const agent of agents) {
+    requirePackagedDirectory(catalogRoot, agent.path);
+    requirePackagedFile(catalogRoot, \`\${agent.path}/agent.yaml\`);
+    requirePackagedFile(catalogRoot, \`\${agent.path}/README.md\`);
+    requirePackagedFile(catalogRoot, \`\${agent.path}/workflow.yaml\`);
+    requirePackagedDirectory(catalogRoot, \`\${agent.path}/prompts\`);
+
+    const workflowText = readFileSync(resolve(catalogRoot, agent.path, 'workflow.yaml'), 'utf8');
+    for (const promptPath of extractPackagedPromptPaths(workflowText)) {
+      requirePackagedFile(catalogRoot, \`\${agent.path}/\${promptPath}\`);
+    }
+  }
+
+  if (process.exitCode) {
+    process.exit(process.exitCode);
+  }
+
+  console.log(\`Validated \${agents.length} agent.\`);
+}
+`;
+}
+
 function writePackagedEntrypoint() {
   const source = readFileSync(join(packageRoot, 'src', 'index.js'), 'utf8');
-  const patched = source
-    .replace(
-      "from '../../agent-runtime/src/index.js';",
-      "from '../runtime/index.js';"
-    )
-    .replace(
-      "const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');",
-      "const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../catalog');"
-    );
+  let patched = replaceRequired(
+    source,
+    "import { readFileSync } from 'node:fs';",
+    "import { existsSync, readFileSync, statSync } from 'node:fs';"
+  );
+  patched = replaceRequired(
+    patched,
+    "from '../../agent-runtime/src/index.js';",
+    "from '../runtime/index.js';"
+  );
+  patched = replaceRequired(
+    patched,
+    "const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');",
+    "const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../catalog');"
+  );
+  patched = replaceRequired(
+    patched,
+    "    await import('../../../scripts/validate-catalog.mjs');\n    return;",
+    "    validatePackagedCatalog(repoRoot);\n    return;"
+  );
+  patched = replaceRequired(
+    patched,
+    '\nasync function main() {',
+    `${packagedValidateSource()}\nasync function main() {`
+  );
+
+  validateStagedEntrypoint(patched);
 
   mkdirSync(join(stageRoot, 'src'), { recursive: true });
   writeFileSync(join(stageRoot, 'src', 'index.js'), patched);
