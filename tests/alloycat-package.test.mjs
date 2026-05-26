@@ -35,13 +35,14 @@ function run(command, args, options = {}) {
   return spawnSync(spec.command, spec.args, {
     cwd: options.cwd ?? repoRoot,
     encoding: 'utf8',
+    env: options.env ? { ...process.env, ...options.env } : process.env,
     input: options.input,
     shell: false
   });
 }
 
-function packAlloycat() {
-  const result = run('npm', ['run', 'pack:alloycat']);
+function packAlloycat(options = {}) {
+  const result = run('npm', ['run', 'pack:alloycat'], options);
   assert.equal(result.status, 0, result.stderr);
 
   const tarball = result.stdout
@@ -67,7 +68,9 @@ test('packed alloycat package contains standalone catalog and runtime files', ()
   assert.equal(manifest.status, 0, manifest.stderr);
   assert.equal(readme.status, 0, readme.stderr);
   const parsedManifest = JSON.parse(manifest.stdout);
+  const sourceManifest = JSON.parse(readFileSync(join(repoRoot, 'packages', 'alloycat', 'package.json'), 'utf8'));
   assert.equal(parsedManifest.name, '@alloy/cat');
+  assert.equal(parsedManifest.version, sourceManifest.version);
   assert.equal(parsedManifest.description, 'Command-line runner for Alloy agent workflow packages.');
   assert.equal(parsedManifest.license, 'UNLICENSED');
   assert.equal(parsedManifest.publishConfig.access, 'public');
@@ -84,6 +87,21 @@ test('packed alloycat package contains standalone catalog and runtime files', ()
   assert.match(listing.stdout, /package\/catalog\/catalog\.yaml/);
   assert.match(listing.stdout, /package\/catalog\/agents\/interaction-audit\/workflow\.yaml/);
   assert.match(listing.stdout, /package\/catalog\/agents\/interaction-audit\/prompts\/00-resolve-project-root\.md/);
+});
+
+test('packed alloycat package includes CI repository metadata when provided', () => {
+  const tarball = packAlloycat({
+    env: {
+      ALLOYCAT_PACKAGE_REPOSITORY_URL: 'git+https://github.com/alloy/alloy-agent-catalog.git'
+    }
+  });
+  const manifest = run('tar', ['-xOf', relative(repoRoot, tarball), 'package/package.json']);
+
+  assert.equal(manifest.status, 0, manifest.stderr);
+  assert.deepEqual(JSON.parse(manifest.stdout).repository, {
+    type: 'git',
+    url: 'git+https://github.com/alloy/alloy-agent-catalog.git'
+  });
 });
 
 test('packed alloycat package can list agents through npx', () => {

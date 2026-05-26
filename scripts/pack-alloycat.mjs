@@ -13,7 +13,9 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageRoot = join(repoRoot, 'packages', 'alloycat');
 const stageRoot = join(packageRoot, 'dist-package');
-const tarballName = 'alloy-cat-0.1.0.tgz';
+const sourceManifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+const packageSlug = sourceManifest.name.replace(/^@/, '').replace(/\//g, '-');
+const tarballName = `${packageSlug}-${sourceManifest.version}.tgz`;
 const tarballPath = join(packageRoot, tarballName);
 
 function copyRequiredFile(from, to) {
@@ -34,8 +36,8 @@ function copyRequiredDir(from, to) {
 
 function writePackageJson() {
   const manifest = {
-    name: '@alloy/cat',
-    version: '0.1.0',
+    name: sourceManifest.name,
+    version: sourceManifest.version,
     description: 'Command-line runner for Alloy agent workflow packages.',
     license: 'UNLICENSED',
     type: 'module',
@@ -63,6 +65,13 @@ function writePackageJson() {
       'README.md'
     ]
   };
+  const repositoryUrl = process.env.ALLOYCAT_PACKAGE_REPOSITORY_URL?.trim();
+  if (repositoryUrl) {
+    manifest.repository = {
+      type: 'git',
+      url: repositoryUrl
+    };
+  }
 
   writeFileSync(join(stageRoot, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 }

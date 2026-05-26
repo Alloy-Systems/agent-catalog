@@ -1,0 +1,49 @@
+name: Publish @alloy/cat
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - alloycat-v*
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish @alloy/cat
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Install npm
+        run: npm install -g npm@11
+
+      - name: Show tool versions
+        run: |
+          node --version
+          npm --version
+
+      - name: Validate catalog
+        run: npm run validate
+
+      - name: Test
+        run: npm test
+
+      - name: Pack @alloy/cat
+        run: npm run pack:alloycat
+        env:
+          ALLOYCAT_PACKAGE_REPOSITORY_URL: git+https://github.com/${{ github.repository }}.git
+
+      - name: Publish @alloy/cat
+        working-directory: packages/alloycat/dist-package
+        run: npm publish --access public
