@@ -35,6 +35,10 @@ function requireDirectory(path, label) {
 
 function writeInstallReadme(projectRoot) {
   const readmePath = join(projectRoot, '.alloycat', 'README.md');
+  if (existsSync(readmePath)) {
+    return;
+  }
+
   writeFileSync(readmePath, [
     '# Alloycat',
     '',

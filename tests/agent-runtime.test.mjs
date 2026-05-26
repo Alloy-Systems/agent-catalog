@@ -118,6 +118,45 @@ test('linked install does not duplicate an existing agent runs gitignore entry',
   }
 });
 
+test('linked install preserves an existing alloycat readme', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-install-readme-'));
+  try {
+    const readmePath = join(tempRoot, '.alloycat', 'README.md');
+    const existingReadme = '# Local Alloycat Notes\n\nKeep this project-specific note.\n';
+    mkdirSync(join(tempRoot, '.alloycat'), { recursive: true });
+    writeFileSync(readmePath, existingReadme);
+
+    installAgent(repoRoot, {
+      agentId: 'interaction-audit',
+      project: tempRoot
+    });
+
+    assert.equal(readFileSync(readmePath, 'utf8'), existingReadme);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('linked install repeated from an empty project keeps one agent runs gitignore entry', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-install-repeat-'));
+  try {
+    installAgent(repoRoot, {
+      agentId: 'interaction-audit',
+      project: tempRoot
+    });
+    const second = installAgent(repoRoot, {
+      agentId: 'interaction-audit',
+      project: tempRoot
+    });
+    const gitignore = readFileSync(join(tempRoot, '.gitignore'), 'utf8');
+
+    assert.equal(second.gitignoreStatus, 'already-present');
+    assert.equal(gitignore.match(/^\.agent-runs\/$/gm).length, 1);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('creates run state for the first phase', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-run-'));
   try {
