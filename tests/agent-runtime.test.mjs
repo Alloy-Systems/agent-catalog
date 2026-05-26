@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -10,6 +10,8 @@ import {
   loadRunState,
   loadWorkflow,
   completeRun,
+  resolveProjectRoot,
+  installAgent,
   renderNextPrompt,
   saveRunState
 } from '../packages/agent-runtime/src/index.js';
@@ -30,6 +32,32 @@ test('loads ordered workflow phases', () => {
   const workflow = loadWorkflow(repoRoot, 'interaction-audit');
   assert.equal(workflow.phases[0].id, 'resolve-project-root');
   assert.equal(workflow.phases.at(-1).id, 'report-assembly');
+});
+
+test('resolves project root by walking up to the nearest git directory', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-root-git-'));
+  try {
+    mkdirSync(join(tempRoot, '.git'));
+    const nested = join(tempRoot, 'src', 'features', 'audit');
+    mkdirSync(nested, { recursive: true });
+
+    assert.equal(resolveProjectRoot(nested), tempRoot);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('resolves project root by walking up to package.json when no git directory exists', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-root-package-'));
+  try {
+    writeFileSync(join(tempRoot, 'package.json'), '{"name":"target"}\n');
+    const nested = join(tempRoot, 'app', 'components');
+    mkdirSync(nested, { recursive: true });
+
+    assert.equal(resolveProjectRoot(nested), tempRoot);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('creates run state for the first phase', () => {
