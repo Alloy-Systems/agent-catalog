@@ -207,7 +207,8 @@ Goal: make normal usage feel like one guided workflow, not a sequence of memoriz
 
 Possible direction:
 
-- keep `init`, `next`, and `remind` for debugging;
+- make `alloycat i` / `alloycat install` the normal first-run command: after the user selects and confirms an agent, install it, create the first run, and render the first phase task immediately;
+- keep `init`, `next`, and `remind` for debugging and explicit run recovery;
 - add a higher-level `run` or `start` command later;
 - use installed project state to infer agent and active run where unambiguous;
 - show clear errors when multiple agents or active runs exist.
@@ -220,6 +221,8 @@ Why this matters:
 
 Acceptance checks:
 
+- Installing one selected agent creates the initial run and prints the first phase without requiring a separate `init`.
+- If the selected agent is already installed, the CLI does not silently create duplicate ambiguous runs; it resumes, asks, or errors with a clear next action.
 - Multiple installed agents never select silently.
 - Multiple active runs never select silently.
 - UX tests cover the single-agent and multi-agent cases.
