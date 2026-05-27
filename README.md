@@ -13,7 +13,7 @@ This repository stores agent packages, not project-specific audit output. Each a
 ```text
 agents/
   interaction-auditor/
-    agent.yaml
+    agent.md
     workflow.yaml
     prompts/
     schemas/

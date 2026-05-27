@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseAgentMarkdown, resolvePackageRelativePath } from './manifest.js';
 
 function cleanValue(value) {
   return value.trim().replace(/^["']|["']$/g, '');
@@ -40,16 +41,17 @@ export function loadAgent(repoRoot, agentId) {
     throw new Error(`Unknown agent: ${agentId}`);
   }
 
-  const text = readText(join(repoRoot, catalogEntry.path, 'agent.yaml'));
-  const manifest = { ...catalogEntry };
+  const agentPath = resolvePackageRelativePath(repoRoot, catalogEntry.path, `catalog.yaml path for ${agentId}`);
+  const document = parseAgentMarkdown(readText(join(repoRoot, agentPath, 'agent.md')));
+  const manifest = {
+    ...catalogEntry,
+    ...document.manifest,
+    path: agentPath,
+    documentBody: document.body
+  };
 
-  for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/^([a-z_]+):\s*(.+)$/);
-    if (!match) {
-      continue;
-    }
-    const [, key, value] = match;
-    manifest[key] = cleanValue(value);
+  if (manifest.id !== catalogEntry.id) {
+    throw new Error(`Agent id mismatch for ${catalogEntry.path}: catalog has ${catalogEntry.id}, agent.md has ${manifest.id}`);
   }
 
   return manifest;

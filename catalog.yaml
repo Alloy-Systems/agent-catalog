@@ -5,9 +5,6 @@ catalog:
 agents:
   - id: interaction-auditor
     path: agents/interaction-auditor
-    status: draft
-    version: 0.1.0
-    description: Agent that audits visible UI behavior, source-of-truth conformance, and e2e coverage.
     hosts:
       - primary-cli
       - secondary-cli

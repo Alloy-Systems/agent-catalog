@@ -88,8 +88,13 @@ test('packed alloycat package contains standalone catalog and runtime files', ()
   assert.match(listing.stdout, /package\/src\/index\.js/);
   assert.match(listing.stdout, /package\/runtime\/index\.js/);
   assert.match(listing.stdout, /package\/catalog\/catalog\.yaml/);
+  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/agent\.md/);
+  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/adapters\/primary-cli\/README\.md/);
+  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/adapters\/secondary-cli\/README\.md/);
   assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/workflow\.yaml/);
   assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/prompts\/00-resolve-project-root\.md/);
+  assert.doesNotMatch(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/agent\.yaml/);
+  assert.doesNotMatch(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/README\.md/);
 });
 
 test('packed alloycat package includes CI repository metadata when provided', () => {

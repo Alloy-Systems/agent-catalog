@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadAgent } from './catalog.js';
+import { resolvePackageRelativePath } from './manifest.js';
 
 function cleanValue(value) {
   return value.trim().replace(/^["']|["']$/g, '');
@@ -57,7 +58,16 @@ function parseList(lines, startIndex) {
 
 export function loadWorkflow(repoRoot, agentId) {
   const agent = loadAgent(repoRoot, agentId);
-  const text = readFileSync(join(repoRoot, agent.path, 'workflow.yaml'), 'utf8');
+  return loadWorkflowFromAgentPackage(agent, join(repoRoot, agent.path), agent.runtime?.workflow ?? 'workflow.yaml');
+}
+
+export function loadWorkflowFromAgentPackage(agent, packageRoot, workflowPath) {
+  const safeWorkflowPath = resolvePackageRelativePath(
+    packageRoot,
+    workflowPath,
+    `${agent.id} runtime.workflow`
+  );
+  const text = readFileSync(join(packageRoot, safeWorkflowPath), 'utf8');
   const lines = text.split(/\r?\n/);
   const phases = [];
 
@@ -90,9 +100,19 @@ export function loadWorkflow(repoRoot, agentId) {
   }
 
   return {
-    id: agentId,
+    id: agent.id,
     name: agent.name,
     agent,
+    packageRoot,
+    workflowPath: safeWorkflowPath,
     phases
   };
+}
+
+export function loadInstalledWorkflow(installedAgent) {
+  return loadWorkflowFromAgentPackage(
+    installedAgent.agent,
+    installedAgent.packageRoot,
+    installedAgent.workflowPath ?? installedAgent.agent.runtime?.workflow ?? 'workflow.yaml'
+  );
 }

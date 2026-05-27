@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { loadWorkflow } from './workflow.js';
+import { loadAgent } from './catalog.js';
+import { resolveAgentProjectPath } from './manifest.js';
+import { loadInstalledWorkflow, loadWorkflow } from './workflow.js';
 
 function defaultRunId() {
   return new Date().toISOString().replace(/[:.]/g, '-');
@@ -8,11 +10,16 @@ function defaultRunId() {
 
 export function createRun(repoRoot, options) {
   const agentId = options.agentId;
+  const agent = loadAgent(repoRoot, agentId);
   const workflow = loadWorkflow(repoRoot, agentId);
   const runId = options.runId ?? defaultRunId();
   const projectRoot = resolve(options.project);
-  const runRoot = resolve(options.runRoot ?? join(projectRoot, '.alloycat', 'agents', agentId, 'runs'));
+  const runRoot = options.runRoot
+    ? resolve(options.runRoot)
+    : resolveAgentProjectPath(projectRoot, agent, agent.artifacts.run_root);
   const runDir = join(runRoot, runId);
+  const stateFile = agent.artifacts.state_file;
+  const statePath = join(runDir, stateFile);
   const firstPhase = workflow.phases[0];
 
   mkdirSync(runDir, { recursive: true });
@@ -31,16 +38,47 @@ export function createRun(repoRoot, options) {
     artifacts: {}
   };
 
-  saveRunState(runDir, state);
-  return { runDir, state };
+  saveRunState(runDir, state, { stateFile });
+  return { runDir, state, stateFile, statePath };
 }
 
-export function loadRunState(runDir) {
-  return JSON.parse(readFileSync(join(runDir, 'state.json'), 'utf8'));
+export function createInstalledRun(installedAgent, options) {
+  const workflow = loadInstalledWorkflow(installedAgent);
+  const runId = options.runId ?? defaultRunId();
+  const projectRoot = resolve(options.project);
+  const runRoot = options.runRoot ? resolve(options.runRoot) : installedAgent.runRoot;
+  const runDir = join(runRoot, runId);
+  const stateFile = installedAgent.stateFile;
+  const statePath = join(runDir, stateFile);
+  const firstPhase = workflow.phases[0];
+
+  mkdirSync(runDir, { recursive: true });
+
+  const state = {
+    schema_version: 1,
+    run_id: runId,
+    agent_id: installedAgent.id,
+    project_root: projectRoot,
+    repo_root: installedAgent.packageRoot,
+    install_dir: installedAgent.installDir,
+    run_dir: runDir,
+    status: 'running',
+    current_phase: firstPhase.id,
+    completed_phases: [],
+    created_at: new Date().toISOString(),
+    artifacts: {}
+  };
+
+  saveRunState(runDir, state, { stateFile });
+  return { runDir, state, stateFile, statePath };
 }
 
-export function saveRunState(runDir, state) {
-  writeFileSync(join(runDir, 'state.json'), `${JSON.stringify(state, null, 2)}\n`);
+export function loadRunState(runDir, options = {}) {
+  return JSON.parse(readFileSync(join(runDir, options.stateFile ?? 'state.json'), 'utf8'));
+}
+
+export function saveRunState(runDir, state, options = {}) {
+  writeFileSync(join(runDir, options.stateFile ?? 'state.json'), `${JSON.stringify(state, null, 2)}\n`);
 }
 
 export function getCurrentPhase(repoRoot, state) {
@@ -101,6 +139,20 @@ function validateOutputArtifacts(runDir, phase) {
 export function completeRun(repoRoot, runDir) {
   const state = loadRunState(runDir);
   const workflow = loadWorkflow(repoRoot, state.agent_id);
+  return completeWorkflowRun(workflow, runDir, { state });
+}
+
+export function completeInstalledRun(installedAgent, runDir) {
+  const state = loadRunState(runDir, { stateFile: installedAgent.stateFile });
+  const workflow = loadInstalledWorkflow(installedAgent);
+  return completeWorkflowRun(workflow, runDir, {
+    state,
+    stateFile: installedAgent.stateFile
+  });
+}
+
+function completeWorkflowRun(workflow, runDir, options = {}) {
+  const state = options.state ?? loadRunState(runDir, { stateFile: options.stateFile });
   const { phase, phaseIndex } = findCurrentPhase(workflow, state);
   const missingArtifacts = missingOutputArtifacts(runDir, phase);
 
@@ -125,7 +177,7 @@ export function completeRun(repoRoot, runDir) {
     nextState.completed_at = nextState.updated_at;
   }
 
-  saveRunState(runDir, nextState);
+  saveRunState(runDir, nextState, { stateFile: options.stateFile });
 
   return {
     state: nextState,

@@ -4,14 +4,18 @@ import { basename, dirname, join, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
-  completeRun,
-  createRun,
+  completeInstalledRun,
+  createInstalledRun,
+  extractMarkdownSection,
   installAgent,
   listInstalledAgents,
   loadAgent,
   loadCatalog,
+  loadInstalledAgent,
   loadRunState,
-  renderNextPrompt,
+  parseAgentMarkdown,
+  renderInstalledNextPrompt,
+  resolvePackageRelativePath,
   resolveProjectRoot,
   uninstallAgent,
   uninstallProject
@@ -129,7 +133,8 @@ function printUsage() {
 
 function commandList() {
   const catalog = loadCatalog(repoRoot);
-  for (const agent of catalog.agents) {
+  for (const entry of catalog.agents) {
+    const agent = loadAgent(repoRoot, entry.id);
     console.log(`${agent.id}\t${agent.status}\t${agent.description}`);
   }
 }
@@ -166,7 +171,8 @@ function printProjectUninstallResult(result) {
 function printAgentChoices(catalog, action = 'install') {
   console.log(`Select an agent to ${action}:`);
   console.log('');
-  catalog.agents.forEach((agent, index) => {
+  catalog.agents.forEach((entry, index) => {
+    const agent = loadAgent(repoRoot, entry.id);
     console.log(`${index + 1}. ${agent.id}\t${agent.status}\t${agent.description}`);
   });
   console.log('');
@@ -231,14 +237,16 @@ function listRunStatesForInstalledAgent(installedAgent) {
     return [];
   }
 
+  const stateFile = installedAgent.stateFile ?? installedAgent.config?.state_file ?? 'state.json';
   return readdirSync(installedAgent.runRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => join(installedAgent.runRoot, entry.name))
-    .filter((runDir) => existsSync(join(runDir, 'state.json')))
+    .filter((runDir) => existsSync(join(runDir, stateFile)))
     .map((runDir) => ({
       runDir,
-      state: loadRunState(runDir),
-      mtimeMs: statSync(join(runDir, 'state.json')).mtimeMs
+      installedAgent,
+      state: loadRunState(runDir, { stateFile }),
+      mtimeMs: statSync(join(runDir, stateFile)).mtimeMs
     }));
 }
 
@@ -250,9 +258,23 @@ function findActiveRuns(projectRoot, agentId) {
     .sort((left, right) => right.mtimeMs - left.mtimeMs);
 }
 
-function resolveActiveRunDir(options, explicitAgentId, action) {
+function resolveActiveRun(options, explicitAgentId, action) {
   if (options.run) {
-    return resolve(options.run);
+    const projectRoot = resolveCommandProjectRoot(options);
+    const runDir = resolve(options.run);
+    const installedAgents = listInstalledAgents(projectRoot)
+      .filter((agent) => !explicitAgentId || agent.id === explicitAgentId)
+      .filter((agent) => {
+        const relativePath = runDir.startsWith(agent.runRoot) ? runDir.slice(agent.runRoot.length) : null;
+        return relativePath !== null && (relativePath === '' || relativePath.startsWith(sep));
+      });
+    if (installedAgents.length !== 1) {
+      throw new Error(`Agent id is required for ${action} because the run does not identify exactly one installed agent: ${runDir}`);
+    }
+    return {
+      runDir,
+      installedAgent: loadInstalledAgent(projectRoot, installedAgents[0].id)
+    };
   }
 
   const projectRoot = resolveCommandProjectRoot(options);
@@ -265,7 +287,10 @@ function resolveActiveRunDir(options, explicitAgentId, action) {
     throw new Error(`Run is required for ${action} because multiple active runs exist: ${activeRuns.map((run) => run.runDir).join(', ')}`);
   }
 
-  return activeRuns[0].runDir;
+  return {
+    runDir: activeRuns[0].runDir,
+    installedAgent: loadInstalledAgent(projectRoot, activeRuns[0].installedAgent.id)
+  };
 }
 
 async function commandInstall(agentId, options) {
@@ -298,8 +323,8 @@ async function commandUninstall(agentId, options) {
 function commandInit(agentId, options) {
   const project = resolveCommandProjectRoot(options);
   const selectedAgentId = selectSingleInstalledAgentId(project, agentId, 'init');
-  const run = createRun(repoRoot, {
-    agentId: selectedAgentId,
+  const installedAgent = loadInstalledAgent(project, selectedAgentId);
+  const run = createInstalledRun(installedAgent, {
     project,
     runRoot: options.runRoot,
     runId: options.runId
@@ -307,12 +332,12 @@ function commandInit(agentId, options) {
   console.log(`Initialized ${run.state.run_id}`);
   console.log(`Run directory: ${run.runDir}`);
   console.log('');
-  console.log(renderNextPrompt(repoRoot, run.runDir, { commandPrefix: defaultCommandPrefix }));
+  console.log(renderInstalledNextPrompt(installedAgent, run.runDir, { commandPrefix: defaultCommandPrefix }));
 }
 
 function commandStatus(agentId, options) {
-  const runDir = resolveActiveRunDir(options, agentId, 'status');
-  const state = loadRunState(runDir);
+  const activeRun = resolveActiveRun(options, agentId, 'status');
+  const state = loadRunState(activeRun.runDir, { stateFile: activeRun.installedAgent.stateFile });
   console.log(`Run: ${state.run_id}`);
   console.log(`Agent: ${state.agent_id}`);
   console.log(`Project: ${state.project_root}`);
@@ -320,13 +345,13 @@ function commandStatus(agentId, options) {
 }
 
 function commandRemind(agentId, options) {
-  const runDir = resolveActiveRunDir(options, agentId, 'remind');
-  console.log(renderNextPrompt(repoRoot, runDir, { commandPrefix: defaultCommandPrefix }));
+  const activeRun = resolveActiveRun(options, agentId, 'remind');
+  console.log(renderInstalledNextPrompt(activeRun.installedAgent, activeRun.runDir, { commandPrefix: defaultCommandPrefix }));
 }
 
 function commandNext(agentId, options) {
-  const runDir = resolveActiveRunDir(options, agentId, 'next');
-  const result = completeRun(repoRoot, runDir);
+  const activeRun = resolveActiveRun(options, agentId, 'next');
+  const result = completeInstalledRun(activeRun.installedAgent, activeRun.runDir);
 
   console.log(`Completed phase: ${result.completedPhase.id}`);
   if (result.workflowCompleted) {
@@ -338,7 +363,7 @@ function commandNext(agentId, options) {
     console.log(`Workflow stopped at user confirmation gate: ${result.nextPhase.id}`);
   }
   console.log('');
-  console.log(renderNextPrompt(repoRoot, runDir, { commandPrefix: defaultCommandPrefix }));
+  console.log(renderInstalledNextPrompt(activeRun.installedAgent, activeRun.runDir, { commandPrefix: defaultCommandPrefix }));
 }
 
 async function main() {

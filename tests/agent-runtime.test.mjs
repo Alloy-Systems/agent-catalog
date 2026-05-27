@@ -1,39 +1,201 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import {
   createRun,
+  createInstalledRun,
+  extractMarkdownSection,
+  isAnyAbsolute,
   loadAgent,
+  loadAgentDocument,
   loadCatalog,
   loadRunState,
+  loadInstalledAgent,
   loadWorkflow,
   completeRun,
+  completeInstalledRun,
+  parseAgentMarkdown,
   resolveProjectRoot,
+  resolveAgentProjectPath,
+  resolveArtifactTemplate,
   installAgent,
   uninstallProject,
   uninstallAgent,
   renderNextPrompt,
+  renderInstalledNextPrompt,
   saveRunState
 } from '../packages/agent-runtime/src/index.js';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 
-test('loads catalog and Interaction Audit agent metadata', () => {
+function copyRepoFixture(sourceRoot, prefix) {
+  const targetRoot = mkdtempSync(join(tmpdir(), prefix));
+  cpSync(sourceRoot, targetRoot, {
+    recursive: true,
+    filter: (path) => {
+      if (path.includes(`${sep}.git${sep}`) || path.includes(`${sep}node_modules${sep}`)) {
+        return false;
+      }
+      if (path.includes(`${sep}packages${sep}alloycat${sep}dist-package`)) {
+        return false;
+      }
+      return !path.endsWith('.tgz');
+    }
+  });
+  return targetRoot;
+}
+
+test('parses agent.md frontmatter and selected Markdown sections', () => {
+  const document = parseAgentMarkdown(`---
+schema_version: 1
+id: interaction-auditor
+name: Alloy Interaction Auditor
+runtime:
+  model: workflow
+  workflow: workflow.yaml
+artifacts:
+  run_root: .alloycat/agents/{agent_id}/runs
+prompt_context:
+  include_sections:
+    - Operating Rules
+---
+
+# Alloy Interaction Auditor
+
+## Operating Rules
+
+Follow the phase-gated workflow.
+`);
+
+  assert.equal(document.manifest.id, 'interaction-auditor');
+  assert.equal(document.manifest.schema_version, 1);
+  assert.equal(document.manifest.name, 'Alloy Interaction Auditor');
+  assert.equal(document.manifest.runtime.model, 'workflow');
+  assert.equal(document.manifest.runtime.workflow, 'workflow.yaml');
+  assert.equal(document.manifest.artifacts.run_root, '.alloycat/agents/{agent_id}/runs');
+  assert.deepEqual(document.manifest.prompt_context.include_sections, ['Operating Rules']);
+  assert.match(
+    extractMarkdownSection(document.body, 'Operating Rules'),
+    /Follow the phase-gated workflow/
+  );
+});
+
+test('resolves manifest artifact templates with restricted placeholders', () => {
+  assert.equal(
+    resolveArtifactTemplate('.alloycat/agents/{agent_id}/runs', {
+      agentId: 'interaction-auditor'
+    }),
+    '.alloycat/agents/interaction-auditor/runs'
+  );
+
+  assert.equal(isAnyAbsolute('C:/outside'), true);
+
+  assert.throws(
+    () => resolveArtifactTemplate('.alloycat/{unknown}', {
+      agentId: 'interaction-auditor'
+    }),
+    /Unknown artifact path placeholder: unknown/
+  );
+
+  assert.throws(
+    () => resolveArtifactTemplate('{project_root}/.alloycat/{agent_id}', {
+      agentId: 'interaction-auditor'
+    }),
+    /Unknown artifact path placeholder: project_root/
+  );
+
+  assert.throws(
+    () => resolveArtifactTemplate('.alloycat/{agent-id}', {
+      agentId: 'interaction-auditor'
+    }),
+    /Unknown artifact path placeholder: agent-id/
+  );
+
+  assert.throws(
+    () => resolveArtifactTemplate('.alloycat\\agents\\{agent_id}', {
+      agentId: 'interaction-auditor'
+    }),
+    /must use POSIX separators/
+  );
+
+  assert.throws(
+    () => resolveArtifactTemplate('C:/outside/{agent_id}', {
+      agentId: 'interaction-auditor'
+    }),
+    /must be relative/
+  );
+
+  assert.throws(
+    () => resolveAgentProjectPath('/tmp/project', { id: 'interaction-auditor' }, '.'),
+    /must not resolve to the project root/
+  );
+});
+
+test('loads agent.md frontmatter and selected Markdown sections from disk', () => {
+  const document = loadAgentDocument(repoRoot, 'agents/interaction-auditor/agent.md');
+
+  assert.equal(document.manifest.id, 'interaction-auditor');
+  assert.equal(document.manifest.name, 'Alloy Interaction Auditor');
+  assert.equal(document.manifest.runtime.model, 'workflow');
+  assert.equal(document.manifest.runtime.workflow, 'workflow.yaml');
+  assert.equal(document.manifest.artifacts.run_root, '.alloycat/agents/{agent_id}/runs');
+  assert.deepEqual(document.manifest.prompt_context.include_sections, [
+    'Operating Rules',
+    'Evidence Rules',
+    'Forbidden Actions'
+  ]);
+  assert.match(
+    extractMarkdownSection(document.body, 'Operating Rules'),
+    /Follow the phase-gated workflow/
+  );
+});
+
+test('loads catalog index and Interaction Auditor markdown manifest metadata', () => {
   const catalog = loadCatalog(repoRoot);
   assert.equal(catalog.agents.length, 1);
-  assert.equal(catalog.agents[0].id, 'interaction-auditor');
+  assert.deepEqual(catalog.agents[0], {
+    id: 'interaction-auditor',
+    path: 'agents/interaction-auditor'
+  });
 
   const agent = loadAgent(repoRoot, 'interaction-auditor');
   assert.equal(agent.name, 'Alloy Interaction Auditor');
-  assert.equal(agent.runtime_model, 'workflow');
+  assert.equal(agent.runtime.model, 'workflow');
+  assert.equal(agent.runtime.workflow, 'workflow.yaml');
+  assert.equal(agent.artifacts.install_root, '.alloycat/agents/{agent_id}');
+  assert.equal(agent.artifacts.run_root, '.alloycat/agents/{agent_id}/runs');
+  assert.equal(agent.artifacts.state_file, 'state.json');
+  assert.match(agent.documentBody, /## Operating Rules/);
 });
 
 test('loads ordered workflow phases', () => {
   const workflow = loadWorkflow(repoRoot, 'interaction-auditor');
   assert.equal(workflow.phases[0].id, 'resolve-project-root');
   assert.equal(workflow.phases.at(-1).id, 'report-assembly');
+});
+
+test('loads workflow from agent.md runtime workflow path', () => {
+  const tempRepo = copyRepoFixture(repoRoot, 'alloycat-workflow-path-');
+  try {
+    const agentPath = join(tempRepo, 'agents', 'interaction-auditor', 'agent.md');
+    const originalWorkflowPath = join(tempRepo, 'agents', 'interaction-auditor', 'workflow.yaml');
+    const workflowPath = join(tempRepo, 'agents', 'interaction-auditor', 'custom-workflow.yaml');
+    writeFileSync(workflowPath, readFileSync(originalWorkflowPath, 'utf8'));
+    rmSync(originalWorkflowPath);
+    writeFileSync(
+      agentPath,
+      readFileSync(agentPath, 'utf8').replace('workflow: workflow.yaml', 'workflow: custom-workflow.yaml')
+    );
+
+    const workflow = loadWorkflow(tempRepo, 'interaction-auditor');
+
+    assert.equal(workflow.id, 'interaction-auditor');
+    assert.equal(workflow.phases[0].id, 'resolve-project-root');
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+  }
 });
 
 test('loads human-readable phase metadata and output artifact contracts', () => {
@@ -91,6 +253,7 @@ test('linked install writes project config, run root, readme, and gitignore entr
     const runRoot = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs');
     const gitignorePath = join(tempRoot, '.gitignore');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    const packageRoot = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'package');
 
     assert.equal(result.agent.id, 'interaction-auditor');
     assert.equal(result.projectRoot, tempRoot);
@@ -104,9 +267,17 @@ test('linked install writes project config, run root, readme, and gitignore entr
     assert.equal(config.catalog_root, repoRoot);
     assert.equal(config.agent_path, join(repoRoot, 'agents', 'interaction-auditor'));
     assert.equal(config.run_root, runRoot);
+    assert.equal(config.installed_package_dir, 'package');
+    assert.equal(config.agent_document_path, 'agent.md');
+    assert.equal(config.workflow_path, 'workflow.yaml');
+    assert.equal(config.prompt_root, 'prompts');
     assert.match(config.installed_at, /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(existsSync(readmePath), false);
     assert.equal(existsSync(runRoot), true);
+    assert.equal(existsSync(join(packageRoot, 'agent.md')), true);
+    assert.equal(existsSync(join(packageRoot, 'workflow.yaml')), true);
+    assert.equal(existsSync(join(packageRoot, 'prompts', '00-resolve-project-root.md')), true);
+    assert.equal(existsSync(join(packageRoot, 'prompts', '06-report-assembly.md')), true);
     assert.equal(existsSync(join(tempRoot, '.agent-runs')), false);
     assert.match(readFileSync(gitignorePath, 'utf8'), /^\.alloycat\/$/m);
     assert.doesNotMatch(readFileSync(gitignorePath, 'utf8'), /^\.agent-runs\/$/m);
@@ -173,6 +344,86 @@ test('linked install repeated from an empty project keeps one alloycat gitignore
     assert.equal(gitignore.includes('.agent-runs'), false);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('install and run paths are derived from agent.md artifacts', () => {
+  const tempRepo = copyRepoFixture(repoRoot, 'alloycat-manifest-paths-');
+  const tempProject = mkdtempSync(join(tmpdir(), 'alloycat-manifest-project-'));
+  try {
+    const agentPath = join(tempRepo, 'agents', 'interaction-auditor', 'agent.md');
+    writeFileSync(
+      agentPath,
+      readFileSync(agentPath, 'utf8')
+        .replace(
+          'run_root: .alloycat/agents/{agent_id}/runs',
+          'run_root: .custom-alloycat/{agent_id}/runs'
+        )
+        .replace('state_file: state.json', 'state_file: run-state.json')
+    );
+
+    const install = installAgent(tempRepo, {
+      agentId: 'interaction-auditor',
+      project: tempProject
+    });
+    const run = createRun(tempRepo, {
+      agentId: 'interaction-auditor',
+      project: tempProject,
+      runId: 'manifest-run'
+    });
+
+    assert.equal(install.runRoot, join(tempProject, '.custom-alloycat', 'interaction-auditor', 'runs'));
+    assert.equal(run.runDir, join(tempProject, '.custom-alloycat', 'interaction-auditor', 'runs', 'manifest-run'));
+    assert.equal(run.stateFile, 'run-state.json');
+    assert.equal(run.statePath, join(run.runDir, 'run-state.json'));
+    assert.equal(loadRunState(run.runDir, { stateFile: 'run-state.json' }).run_id, 'manifest-run');
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+    rmSync(tempProject, { recursive: true, force: true });
+  }
+});
+
+test('installed runs render prompts from the copied package without source catalog access', () => {
+  const tempRepo = copyRepoFixture(repoRoot, 'alloycat-installed-source-');
+  const tempProject = mkdtempSync(join(tmpdir(), 'alloycat-installed-project-'));
+  try {
+    installAgent(tempRepo, {
+      agentId: 'interaction-auditor',
+      project: tempProject
+    });
+
+    const installedPromptPath = join(
+      tempProject,
+      '.alloycat',
+      'agents',
+      'interaction-auditor',
+      'package',
+      'prompts',
+      '00-resolve-project-root.md'
+    );
+    writeFileSync(
+      installedPromptPath,
+      `${readFileSync(installedPromptPath, 'utf8')}\n\nInstalled package prompt marker.\n`
+    );
+    rmSync(join(tempRepo, 'catalog.yaml'));
+
+    const installedAgent = loadInstalledAgent(tempProject, 'interaction-auditor');
+    const run = createInstalledRun(installedAgent, {
+      project: tempProject,
+      runId: 'installed-run'
+    });
+    const prompt = renderInstalledNextPrompt(installedAgent, run.runDir);
+
+    assert.match(prompt, /Installed package prompt marker/);
+
+    writeFileSync(join(run.runDir, '00-project-root.json'), '{}\n');
+    const result = completeInstalledRun(installedAgent, run.runDir);
+
+    assert.equal(result.completedPhase.id, 'resolve-project-root');
+    assert.equal(result.nextPhase.id, 'project-discovery');
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+    rmSync(tempProject, { recursive: true, force: true });
   }
 });
 
@@ -294,6 +545,13 @@ test('renders current phase prompt with phase metadata and artifact contracts', 
     assert.match(prompt, /Output artifacts/);
     assert.match(prompt, /00-project-root\.json/);
     assert.match(prompt, /Format: json/);
+    assert.match(prompt, /## Agent Context/);
+    assert.match(prompt, /### Operating Rules/);
+    assert.match(prompt, /Follow the phase-gated workflow/);
+    assert.match(prompt, /### Evidence Rules/);
+    assert.match(prompt, /Findings must cite concrete evidence/);
+    assert.match(prompt, /### Forbidden Actions/);
+    assert.match(prompt, /Do not fix product code during audit mode/);
     assert.match(prompt, /then run:/);
     assert.match(prompt, /alloycat next/);
   } finally {

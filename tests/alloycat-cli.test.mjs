@@ -20,7 +20,7 @@ function runCli(args, options = {}) {
 test('list prints registered agents', () => {
   const result = runCli(['list']);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /interaction-auditor/);
+  assert.match(result.stdout, /interaction-auditor\tdraft\tAgent that audits visible UI behavior/);
 });
 
 test('info prints one agent manifest', () => {
@@ -136,7 +136,7 @@ test('install without an agent id accepts a numbered selection from stdin', () =
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Select an agent to install:/);
-    assert.match(result.stdout, /1\. interaction-auditor/);
+    assert.match(result.stdout, /1\. interaction-auditor\tdraft\tAgent that audits visible UI behavior/);
     assert.match(result.stdout, /Installed agent: interaction-auditor/);
     assert.equal(config.agent_id, 'interaction-auditor');
   } finally {
@@ -310,6 +310,39 @@ test('init without run root writes under the target project and prints the first
     assert.equal(existsSync(join(runDir, 'state.json')), true);
     assert.match(init.stdout, /Phase: Resolve Project Root \(resolve-project-root\)/);
     assert.doesNotMatch(init.stdout, /--run/);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('init renders phase prompts from the installed agent package', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-installed-prompt-'));
+  try {
+    const install = runCli(['install', 'interaction-auditor'], { cwd: tempRoot });
+    assert.equal(install.status, 0, install.stderr);
+
+    const installedPromptPath = join(
+      tempRoot,
+      '.alloycat',
+      'agents',
+      'interaction-auditor',
+      'package',
+      'prompts',
+      '00-resolve-project-root.md'
+    );
+    writeFileSync(
+      installedPromptPath,
+      `${readFileSync(installedPromptPath, 'utf8')}\n\nInstalled CLI prompt marker.\n`
+    );
+
+    const init = runCli([
+      'init',
+      '--run-id',
+      'cli-installed-prompt-run'
+    ], { cwd: tempRoot });
+
+    assert.equal(init.status, 0, init.stderr);
+    assert.match(init.stdout, /Installed CLI prompt marker/);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }

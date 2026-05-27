@@ -157,10 +157,8 @@ function extractPackagedAgentEntries(catalogText) {
   for (const block of blocks) {
     const id = block.split(/\\r?\\n/, 1)[0]?.trim();
     const path = block.match(/\\n\\s+path:\\s+(.+)/)?.[1]?.trim();
-    const status = block.match(/\\n\\s+status:\\s+(.+)/)?.[1]?.trim();
-    const version = block.match(/\\n\\s+version:\\s+(.+)/)?.[1]?.trim();
-    if (id && path && status && version) {
-      entries.push({ id, path, status, version });
+    if (id && path) {
+      entries.push({ id, path });
     }
   }
 
@@ -169,6 +167,31 @@ function extractPackagedAgentEntries(catalogText) {
 
 function extractPackagedPromptPaths(workflowText) {
   return [...workflowText.matchAll(/\\n\\s+prompt:\\s+(.+)/g)].map((match) => match[1].trim());
+}
+
+function cleanPackagedValue(value) {
+  return value.trim().replace(/^["']|["']$/g, '');
+}
+
+function extractPackagedWorkflowId(workflowText) {
+  return cleanPackagedValue(workflowText.match(/\\n\\s+id:\\s+(.+)/)?.[1] ?? '');
+}
+
+function requirePackagedManifestField(manifest, path) {
+  const value = path.split('.').reduce((current, key) => current?.[key], manifest);
+  if (value === undefined || value === null || value === '') {
+    failValidation(\`Missing required agent.md frontmatter field: \${path}\`);
+  }
+  return value;
+}
+
+function packagedPackagePath(basePath, candidatePath, label) {
+  try {
+    return resolvePackageRelativePath(basePath, candidatePath, label);
+  } catch (error) {
+    failValidation(error.message);
+    return candidatePath;
+  }
 }
 
 function validatePackagedCatalog(catalogRoot) {
@@ -182,15 +205,83 @@ function validatePackagedCatalog(catalogRoot) {
   }
 
   for (const agent of agents) {
-    requirePackagedDirectory(catalogRoot, agent.path);
-    requirePackagedFile(catalogRoot, \`\${agent.path}/agent.yaml\`);
-    requirePackagedFile(catalogRoot, \`\${agent.path}/README.md\`);
-    requirePackagedFile(catalogRoot, \`\${agent.path}/workflow.yaml\`);
-    requirePackagedDirectory(catalogRoot, \`\${agent.path}/prompts\`);
+    const agentPath = packagedPackagePath(catalogRoot, agent.path, \`catalog.yaml path for \${agent.id}\`);
+    const agentRoot = resolve(catalogRoot, agentPath);
+    requirePackagedDirectory(catalogRoot, agentPath);
+    requirePackagedFile(catalogRoot, \`\${agentPath}/agent.md\`);
+    requirePackagedDirectory(catalogRoot, \`\${agentPath}/prompts\`);
 
-    const workflowText = readFileSync(resolve(catalogRoot, agent.path, 'workflow.yaml'), 'utf8');
+    const document = parseAgentMarkdown(readFileSync(resolve(agentRoot, 'agent.md'), 'utf8'));
+    const manifest = document.manifest;
+    if (manifest.id !== agent.id) {
+      failValidation(\`Agent id mismatch for \${agent.path}: catalog has \${agent.id}, agent.md has \${manifest.id}\`);
+    }
+
+    for (const field of [
+      'name',
+      'type',
+      'version',
+      'status',
+      'description',
+      'runtime.model',
+      'runtime.workflow',
+      'artifacts.install_root',
+      'artifacts.run_root',
+      'artifacts.state_file',
+      'supports.hosts'
+    ]) {
+      requirePackagedManifestField(manifest, field);
+    }
+
+    const includedSections = manifest.prompt_context?.include_sections;
+    if (!Array.isArray(includedSections) || includedSections.length === 0) {
+      failValidation('Missing required agent.md frontmatter field: prompt_context.include_sections');
+    } else {
+      for (const section of includedSections) {
+        if (!extractMarkdownSection(document.body, section)) {
+          failValidation(\`Missing agent.md prompt context section: \${section}\`);
+        }
+      }
+    }
+
+    const supportedHosts = manifest.supports?.hosts;
+    if (!supportedHosts || Array.isArray(supportedHosts) || typeof supportedHosts !== 'object') {
+      failValidation('Missing required agent.md frontmatter field: supports.hosts');
+    } else {
+      for (const [hostId, host] of Object.entries(supportedHosts)) {
+        if (!host || typeof host !== 'object' || Array.isArray(host)) {
+          failValidation(\`Invalid host adapter entry for \${hostId}\`);
+          continue;
+        }
+        if (!host.adapter_path) {
+          failValidation(\`Missing adapter_path for host adapter: \${hostId}\`);
+          continue;
+        }
+        if (!['skeleton', 'experimental', 'stable', 'deprecated'].includes(host.status)) {
+          failValidation(\`Unsupported adapter status for \${hostId}: \${host.status}\`);
+        }
+
+        const adapterPath = packagedPackagePath(agentRoot, host.adapter_path, \`\${agent.id} supports.hosts.\${hostId}.adapter_path\`);
+        requirePackagedDirectory(catalogRoot, \`\${agentPath}/\${adapterPath}\`);
+        const adapterReadme = resolve(catalogRoot, agentPath, adapterPath, 'README.md');
+        const adapterEntry = resolve(catalogRoot, agentPath, adapterPath, \`\${hostId}.md\`);
+        if (!existsSync(adapterReadme) && !existsSync(adapterEntry)) {
+          failValidation(\`Missing adapter README or host entry for \${hostId}: \${agentPath}/\${adapterPath}\`);
+        }
+      }
+    }
+
+    const workflowPath = packagedPackagePath(agentRoot, manifest.runtime.workflow, \`\${agent.id} runtime.workflow\`);
+    requirePackagedFile(catalogRoot, \`\${agentPath}/\${workflowPath}\`);
+
+    const workflowText = readFileSync(resolve(agentRoot, workflowPath), 'utf8');
+    const workflowId = extractPackagedWorkflowId(workflowText);
+    if (workflowId !== agent.id) {
+      failValidation(\`Workflow id differs from agent id for \${agent.id}: \${workflowId}\`);
+    }
     for (const promptPath of extractPackagedPromptPaths(workflowText)) {
-      requirePackagedFile(catalogRoot, \`\${agent.path}/\${promptPath}\`);
+      const safePromptPath = packagedPackagePath(agentRoot, promptPath, \`\${agent.id} workflow prompt\`);
+      requirePackagedFile(catalogRoot, \`\${agentPath}/\${safePromptPath}\`);
     }
   }
 
