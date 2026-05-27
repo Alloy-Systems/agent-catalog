@@ -1,0 +1,6 @@
+{
+  "run_interaction_audit": true,
+  "run_visual_conformance_audit": false,
+  "run_e2e_coverage_audit": true,
+  "rationale": "Explain which audit tracks are enabled and why."
+}

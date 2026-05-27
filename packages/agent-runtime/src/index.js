@@ -3,6 +3,7 @@ export { installAgent, listInstalledAgents, loadInstalledAgent, resolveProjectRo
 export { completeInstalledRun, completeRun, createInstalledRun, createRun, getCurrentPhase, loadRunState, saveRunState } from './runs.js';
 export { renderInstalledNextPrompt, renderNextPrompt } from './prompts.js';
 export { loadInstalledWorkflow, loadWorkflow } from './workflow.js';
+export { formatValidationErrors, validateCatalogRoot } from './validation.js';
 export {
   extractMarkdownSection,
   isAnyAbsolute,

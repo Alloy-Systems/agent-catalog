@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Interaction Auditor Branch Plan",
+  "type": "object",
+  "required": [
+    "run_interaction_audit",
+    "run_visual_conformance_audit",
+    "run_e2e_coverage_audit"
+  ],
+  "properties": {
+    "run_interaction_audit": {
+      "type": "boolean"
+    },
+    "run_visual_conformance_audit": {
+      "type": "boolean"
+    },
+    "run_e2e_coverage_audit": {
+      "type": "boolean"
+    },
+    "rationale": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

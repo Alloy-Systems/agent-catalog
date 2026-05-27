@@ -6,19 +6,18 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   completeInstalledRun,
   createInstalledRun,
-  extractMarkdownSection,
+  formatValidationErrors,
   installAgent,
   listInstalledAgents,
   loadAgent,
   loadCatalog,
   loadInstalledAgent,
   loadRunState,
-  parseAgentMarkdown,
   renderInstalledNextPrompt,
-  resolvePackageRelativePath,
   resolveProjectRoot,
   uninstallAgent,
-  uninstallProject
+  uninstallProject,
+  validateCatalogRoot
 } from '../../agent-runtime/src/index.js';
 
 const entrypointPath = fileURLToPath(import.meta.url);
@@ -253,6 +252,7 @@ function listRunStatesForInstalledAgent(installedAgent) {
 function findActiveRuns(projectRoot, agentId) {
   return listInstalledAgents(projectRoot)
     .filter((agent) => !agentId || agent.id === agentId)
+    .map((agent) => loadInstalledAgent(projectRoot, agent.id))
     .flatMap(listRunStatesForInstalledAgent)
     .filter((run) => run.state.status === 'running')
     .sort((left, right) => right.mtimeMs - left.mtimeMs);
@@ -416,7 +416,13 @@ async function main() {
   }
 
   if (command === 'validate') {
-    await import('../../../scripts/validate-catalog.mjs');
+    const result = validateCatalogRoot(repoRoot);
+    if (!result.valid) {
+      console.error(formatValidationErrors(result));
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`Validated ${result.agentCount} agent.`);
     return;
   }
 

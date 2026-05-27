@@ -5,6 +5,3 @@ catalog:
 agents:
   - id: interaction-auditor
     path: agents/interaction-auditor
-    hosts:
-      - primary-cli
-      - secondary-cli

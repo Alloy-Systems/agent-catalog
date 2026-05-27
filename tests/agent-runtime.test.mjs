@@ -278,6 +278,10 @@ test('linked install writes project config, run root, readme, and gitignore entr
     assert.equal(existsSync(join(packageRoot, 'workflow.yaml')), true);
     assert.equal(existsSync(join(packageRoot, 'prompts', '00-resolve-project-root.md')), true);
     assert.equal(existsSync(join(packageRoot, 'prompts', '06-report-assembly.md')), true);
+    assert.equal(existsSync(join(packageRoot, 'schemas', '00-project-root.schema.json')), true);
+    assert.equal(existsSync(join(packageRoot, 'schemas', '05-branch-plan.schema.json')), true);
+    assert.equal(existsSync(join(packageRoot, 'templates', 'branch-plan.json')), true);
+    assert.equal(existsSync(join(packageRoot, 'templates', 'final-report.md')), true);
     assert.equal(existsSync(join(tempRoot, '.agent-runs')), false);
     assert.match(readFileSync(gitignorePath, 'utf8'), /^\.alloycat\/$/m);
     assert.doesNotMatch(readFileSync(gitignorePath, 'utf8'), /^\.agent-runs\/$/m);
@@ -357,7 +361,7 @@ test('install and run paths are derived from agent.md artifacts', () => {
       readFileSync(agentPath, 'utf8')
         .replace(
           'run_root: .alloycat/agents/{agent_id}/runs',
-          'run_root: .custom-alloycat/{agent_id}/runs'
+          'run_root: .alloycat/agents/{agent_id}/custom-runs'
         )
         .replace('state_file: state.json', 'state_file: run-state.json')
     );
@@ -372,8 +376,8 @@ test('install and run paths are derived from agent.md artifacts', () => {
       runId: 'manifest-run'
     });
 
-    assert.equal(install.runRoot, join(tempProject, '.custom-alloycat', 'interaction-auditor', 'runs'));
-    assert.equal(run.runDir, join(tempProject, '.custom-alloycat', 'interaction-auditor', 'runs', 'manifest-run'));
+    assert.equal(install.runRoot, join(tempProject, '.alloycat', 'agents', 'interaction-auditor', 'custom-runs'));
+    assert.equal(run.runDir, join(tempProject, '.alloycat', 'agents', 'interaction-auditor', 'custom-runs', 'manifest-run'));
     assert.equal(run.stateFile, 'run-state.json');
     assert.equal(run.statePath, join(run.runDir, 'run-state.json'));
     assert.equal(loadRunState(run.runDir, { stateFile: 'run-state.json' }).run_id, 'manifest-run');
@@ -424,6 +428,31 @@ test('installed runs render prompts from the copied package without source catal
   } finally {
     rmSync(tempRepo, { recursive: true, force: true });
     rmSync(tempProject, { recursive: true, force: true });
+  }
+});
+
+test('installed agent index rejects run roots outside the project install directory', () => {
+  const tempProject = mkdtempSync(join(tmpdir(), 'alloycat-installed-index-project-'));
+  const outsideRoot = mkdtempSync(join(tmpdir(), 'alloycat-installed-index-outside-'));
+  try {
+    installAgent(repoRoot, {
+      agentId: 'interaction-auditor',
+      project: tempProject
+    });
+
+    const configPath = join(tempProject, '.alloycat', 'agents', 'interaction-auditor', 'index.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.run_root = outsideRoot;
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+    assert.throws(
+      () => loadInstalledAgent(tempProject, 'interaction-auditor'),
+      /run_root.*inside.*install_dir/
+    );
+    assert.equal(existsSync(join(outsideRoot, 'blocked-run', 'state.json')), false);
+  } finally {
+    rmSync(tempProject, { recursive: true, force: true });
+    rmSync(outsideRoot, { recursive: true, force: true });
   }
 });
 

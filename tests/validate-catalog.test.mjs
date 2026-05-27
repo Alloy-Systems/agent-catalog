@@ -70,6 +70,93 @@ test('catalog validation rejects workflow id mismatches', () => {
   }
 });
 
+test('catalog validation rejects catalog metadata outside id and path', () => {
+  const tempRepo = copyRepoFixture(repoRoot, 'alloycat-validator-catalog-keys-');
+  try {
+    const catalogPath = join(tempRepo, 'catalog.yaml');
+    writeFileSync(
+      catalogPath,
+      readFileSync(catalogPath, 'utf8').replace(
+        '    path: agents/interaction-auditor',
+        '    path: agents/interaction-auditor\n    status: draft'
+      )
+    );
+
+    const result = runValidation({
+      env: {
+        ALLOYCAT_VALIDATE_ROOT: tempRepo
+      }
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /catalog.yaml entry.*only id and path/i);
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+  }
+});
+
+test('catalog validation rejects invalid manifest lifecycle and quality gates', () => {
+  const tempRepo = copyRepoFixture(repoRoot, 'alloycat-validator-manifest-');
+  try {
+    const agentPath = join(tempRepo, 'agents', 'interaction-auditor', 'agent.md');
+    writeFileSync(
+      agentPath,
+      readFileSync(agentPath, 'utf8')
+        .replace('status: draft', 'status: beta')
+        .replace('requires_tests: true', 'requires_tests: yes')
+    );
+
+    const result = runValidation({
+      env: {
+        ALLOYCAT_VALIDATE_ROOT: tempRepo
+      }
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /unsupported.*status/i);
+    assert.match(result.stderr, /quality gate.*boolean/i);
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+  }
+});
+
+test('catalog validation rejects unsafe artifact and workflow paths', () => {
+  const tempRepo = copyRepoFixture(repoRoot, 'alloycat-validator-unsafe-paths-');
+  try {
+    const agentPath = join(tempRepo, 'agents', 'interaction-auditor', 'agent.md');
+    writeFileSync(
+      agentPath,
+      readFileSync(agentPath, 'utf8')
+        .replace(
+          'run_root: .alloycat/agents/{agent_id}/runs',
+          'run_root: C:/outside/{agent_id}/runs'
+        )
+        .replace('state_file: state.json', 'state_file: ../state.json')
+    );
+    const workflowPath = join(tempRepo, 'agents', 'interaction-auditor', 'workflow.yaml');
+    writeFileSync(
+      workflowPath,
+      readFileSync(workflowPath, 'utf8').replace(
+        'prompt: prompts/00-resolve-project-root.md',
+        'prompt: ../outside.md'
+      )
+    );
+
+    const result = runValidation({
+      env: {
+        ALLOYCAT_VALIDATE_ROOT: tempRepo
+      }
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /must be relative/i);
+    assert.match(result.stderr, /state_file.*plain file name/i);
+    assert.match(result.stderr, /must not contain \.\. segments/i);
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+  }
+});
+
 test('interaction auditor uses canonical agent.md', () => {
   assert.equal(
     existsSync(resolve(repoRoot, 'agents', 'interaction-auditor', 'agent.md')),

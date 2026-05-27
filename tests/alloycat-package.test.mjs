@@ -92,9 +92,30 @@ test('packed alloycat package contains standalone catalog and runtime files', ()
   assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/adapters\/primary-cli\/README\.md/);
   assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/adapters\/secondary-cli\/README\.md/);
   assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/workflow\.yaml/);
+  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/schemas\/00-project-root\.schema\.json/);
+  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/templates\/branch-plan\.json/);
   assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/prompts\/00-resolve-project-root\.md/);
   assert.doesNotMatch(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/agent\.yaml/);
   assert.doesNotMatch(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/README\.md/);
+});
+
+test('staged packaged validator rejects invalid packaged manifests', () => {
+  packAlloycat();
+  const stageRoot = join(repoRoot, 'packages', 'alloycat', 'dist-package');
+  const agentPath = join(stageRoot, 'catalog', 'agents', 'interaction-auditor', 'agent.md');
+  writeFileSync(
+    agentPath,
+    readFileSync(agentPath, 'utf8').replace('status: draft', 'status: beta')
+  );
+
+  const result = spawnSync(process.execPath, [join(stageRoot, 'src', 'index.js'), 'validate'], {
+    cwd: stageRoot,
+    encoding: 'utf8',
+    shell: false
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /unsupported.*status/i);
 });
 
 test('packed alloycat package includes CI repository metadata when provided', () => {

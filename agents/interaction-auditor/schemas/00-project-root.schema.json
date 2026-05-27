@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Interaction Auditor Project Root",
+  "type": "object",
+  "required": ["project_root", "resolved_from", "confidence"],
+  "properties": {
+    "project_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resolved_from": {
+      "type": "string",
+      "minLength": 1
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    }
+  },
+  "additionalProperties": true
+}

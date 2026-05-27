@@ -8,10 +8,10 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { loadAgent } from './catalog.js';
-import { parseAgentMarkdown, resolveAgentProjectPath, resolvePackageRelativePath } from './manifest.js';
-import { loadWorkflow } from './workflow.js';
+import { isAnyAbsolute, parseAgentMarkdown, resolveAgentProjectPath, resolvePackageRelativePath } from './manifest.js';
+import { loadWorkflow, loadWorkflowFromAgentPackage } from './workflow.js';
 
 function findUp(startPath, marker) {
   let current = resolve(startPath);
@@ -35,6 +35,39 @@ function requireDirectory(path, label) {
   }
   if (!statSync(path).isDirectory()) {
     throw new Error(`${label} is not a directory: ${path}`);
+  }
+}
+
+function requireFile(path, label) {
+  if (!existsSync(path)) {
+    throw new Error(`${label} does not exist: ${path}`);
+  }
+  if (!statSync(path).isFile()) {
+    throw new Error(`${label} is not a file: ${path}`);
+  }
+}
+
+function isInside(childPath, parentPath) {
+  const relativePath = relative(parentPath, childPath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAnyAbsolute(relativePath));
+}
+
+function requireConfigString(config, key) {
+  if (typeof config[key] !== 'string' || config[key].trim() === '') {
+    throw new Error(`Installed agent index field must be a non-empty string: ${key}`);
+  }
+  return config[key];
+}
+
+function requirePlainStateFile(stateFile) {
+  if (
+    stateFile === '.' ||
+    stateFile === '..' ||
+    /[\\/]/.test(stateFile) ||
+    /[{}]/.test(stateFile) ||
+    isAnyAbsolute(stateFile)
+  ) {
+    throw new Error('Installed agent index state_file must be a plain file name.');
   }
 }
 
@@ -116,6 +149,14 @@ function copyInstalledPackage(repoRoot, agent, installDir) {
       const promptPath = resolvePackageRelativePath(agentRoot, phase.prompt, `${phase.id} prompt`);
       copyPackageFile(agentRoot, packageRoot, promptPath);
     }
+    for (const output of phase.outputs ?? []) {
+      for (const key of ['schema', 'template']) {
+        if (output?.[key]) {
+          const assetPath = resolvePackageRelativePath(agentRoot, output[key], `${phase.id} ${key}`);
+          copyPackageFile(agentRoot, packageRoot, assetPath);
+        }
+      }
+    }
   }
 
   return packageRoot;
@@ -158,26 +199,71 @@ export function listInstalledAgents(projectRoot) {
 }
 
 export function loadInstalledAgent(projectRoot, agentId) {
+  const resolvedProjectRoot = resolve(projectRoot);
   const installedAgent = listInstalledAgents(projectRoot)
     .find((agent) => agent.id === agentId);
   if (!installedAgent) {
     throw new Error(`Agent is not installed: ${agentId}`);
   }
 
+  const config = installedAgent.config;
+  if (config.schema_version !== 1) {
+    throw new Error(`Installed agent index schema_version must be 1: ${agentId}`);
+  }
+  if (config.agent_id !== installedAgent.id) {
+    throw new Error(`Installed agent index agent_id mismatch: ${config.agent_id} !== ${installedAgent.id}`);
+  }
+  if (config.manifest_snapshot?.id && config.manifest_snapshot.id !== installedAgent.id) {
+    throw new Error(`Installed agent manifest snapshot id mismatch: ${config.manifest_snapshot.id} !== ${installedAgent.id}`);
+  }
+
+  const expectedInstallDir = join(resolvedProjectRoot, '.alloycat', 'agents', installedAgent.id);
+  if (resolve(installedAgent.installDir) !== expectedInstallDir) {
+    throw new Error(`Installed agent directory mismatch for ${installedAgent.id}: ${installedAgent.installDir}`);
+  }
+  if (config.install_dir && resolve(config.install_dir) !== expectedInstallDir) {
+    throw new Error(`Installed agent index install_dir must resolve to ${expectedInstallDir}`);
+  }
+
+  const runRoot = resolve(requireConfigString(config, 'run_root'));
+  if (!isInside(runRoot, expectedInstallDir) || runRoot === expectedInstallDir) {
+    throw new Error('Installed agent index run_root must be inside install_dir.');
+  }
+  const stateFile = requireConfigString(config, 'state_file');
+  requirePlainStateFile(stateFile);
+
   const packageDir = resolvePackageRelativePath(
     installedAgent.installDir,
-    installedAgent.config.installed_package_dir ?? 'package',
+    requireConfigString(config, 'installed_package_dir'),
     `${agentId} installed_package_dir`
   );
   const packageRoot = join(installedAgent.installDir, packageDir);
+  requireDirectory(packageRoot, `${agentId} installed package directory`);
+
   const agentDocumentPath = resolvePackageRelativePath(
     packageRoot,
-    installedAgent.config.agent_document_path ?? 'agent.md',
+    requireConfigString(config, 'agent_document_path'),
     `${agentId} agent_document_path`
   );
+  requireFile(join(packageRoot, agentDocumentPath), `${agentId} agent document`);
+
+  const workflowPath = resolvePackageRelativePath(
+    packageRoot,
+    requireConfigString(config, 'workflow_path'),
+    `${agentId} workflow_path`
+  );
+  requireFile(join(packageRoot, workflowPath), `${agentId} workflow`);
+
+  const promptRoot = resolvePackageRelativePath(
+    packageRoot,
+    requireConfigString(config, 'prompt_root'),
+    `${agentId} prompt_root`
+  );
+  requireDirectory(join(packageRoot, promptRoot), `${agentId} prompt root`);
+
   const document = parseAgentMarkdown(readFileSync(join(packageRoot, agentDocumentPath), 'utf8'));
   const manifest = {
-    ...installedAgent.config.manifest_snapshot,
+    ...config.manifest_snapshot,
     ...document.manifest,
     documentBody: document.body,
     packageRoot
@@ -187,12 +273,30 @@ export function loadInstalledAgent(projectRoot, agentId) {
     throw new Error(`Installed agent id mismatch: ${installedAgent.id} !== ${manifest.id}`);
   }
 
+  const workflow = loadWorkflowFromAgentPackage(manifest, packageRoot, workflowPath);
+  for (const phase of workflow.phases) {
+    if (phase.prompt) {
+      const promptPath = resolvePackageRelativePath(packageRoot, phase.prompt, `${phase.id} prompt`);
+      requireFile(join(packageRoot, promptPath), `${phase.id} prompt`);
+    }
+    for (const output of phase.outputs ?? []) {
+      for (const key of ['schema', 'template']) {
+        if (output?.[key]) {
+          const assetPath = resolvePackageRelativePath(packageRoot, output[key], `${phase.id} ${key}`);
+          requireFile(join(packageRoot, assetPath), `${phase.id} ${key}`);
+        }
+      }
+    }
+  }
+
   return {
     ...installedAgent,
+    runRoot,
+    stateFile,
     packageRoot,
     agentDocumentPath,
-    workflowPath: installedAgent.config.workflow_path ?? manifest.runtime?.workflow,
-    promptRoot: installedAgent.config.prompt_root ?? 'prompts',
+    workflowPath,
+    promptRoot,
     agent: manifest
   };
 }

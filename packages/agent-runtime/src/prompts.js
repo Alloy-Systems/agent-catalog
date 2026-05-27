@@ -38,6 +38,9 @@ function listArtifacts(title, runDir, artifacts = []) {
         if (artifact.template) {
           lines.push(`  - Template: ${artifact.template}`);
         }
+        if (artifact.schema) {
+          lines.push(`  - Schema: ${artifact.schema}`);
+        }
       }
     }
   }
