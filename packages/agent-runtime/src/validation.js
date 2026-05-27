@@ -6,7 +6,8 @@ import {
   parseAgentMarkdown,
   resolveAgentProjectPath,
   resolveArtifactTemplate,
-  resolvePackageRelativePath
+  resolvePackageRelativePath,
+  resolveRunArtifactPath
 } from './manifest.js';
 
 const ALLOWED_AGENT_KEYS = new Set(['id', 'path']);
@@ -19,12 +20,14 @@ const REQUIRED_QUALITY_GATES = [
   'forbids_single_prompt_full_run',
   'requires_tests'
 ];
-const REQUIRED_OUTPUT_METADATA = new Map([
-  ['00-project-root.json', ['schema']],
-  ['02-ui-inventory.json', ['schema']],
-  ['04-confirmed-scope.md', ['template']],
-  ['05-branch-plan.json', ['schema', 'template']],
-  ['07-final-report.md', ['template']]
+const REQUIRED_OUTPUT_METADATA_BY_AGENT = new Map([
+  ['interaction-auditor', new Map([
+    ['00-project-root.json', ['schema']],
+    ['02-ui-inventory.json', ['schema']],
+    ['04-confirmed-scope.md', ['template']],
+    ['05-branch-plan.json', ['schema', 'template']],
+    ['07-final-report.md', ['template']]
+  ])]
 ]);
 
 function cleanValue(value) {
@@ -62,7 +65,7 @@ function parseCatalogEntries(catalogText, errors) {
     const entry = { id, keys: new Set(['id']) };
 
     for (const line of lines.slice(1)) {
-      const match = line.match(/^ {4}([a-z_]+):\s*(.*)$/);
+      const match = line.match(/^ {4}([^:\s][^:]*):\s*(.*)$/);
       if (!match) {
         continue;
       }
@@ -126,6 +129,14 @@ function safePackagePath(basePath, candidatePath, label, errors) {
   }
 }
 
+function safeRunArtifactPath(basePath, candidatePath, label, errors) {
+  try {
+    resolveRunArtifactPath(basePath, candidatePath, label);
+  } catch (error) {
+    pushError(errors, error.message);
+  }
+}
+
 function requireManifestField(manifest, documentPath, field, errors) {
   const value = field.split('.').reduce((current, key) => current?.[key], manifest);
   if (value === undefined || value === null || value === '') {
@@ -161,41 +172,85 @@ function extractWorkflowPaths(workflowText, key) {
     .map((match) => cleanValue(match[1]));
 }
 
-function extractWorkflowOutputs(workflowText) {
-  const outputs = [];
+function extractWorkflowList(workflowText, key) {
+  const values = [];
   const lines = workflowText.split(/\r?\n/);
 
   for (let index = 0; index < lines.length; index += 1) {
-    const item = lines[index].match(/^(\s*)-\s+path:\s+(.+)$/);
-    if (!item) {
+    const section = lines[index].match(new RegExp(`^(\\s*)${key}:\\s*(.*)$`));
+    if (!section) {
       continue;
     }
 
-    const [, rawIndent, rawPath] = item;
-    const output = { path: cleanValue(rawPath) };
-    index += 1;
-
-    while (index < lines.length) {
-      if (/^\s*-\s+/.test(lines[index])) {
-        break;
-      }
-      const property = lines[index].match(/^(\s+)([a-z_]+):\s+(.+)$/);
-      if (!property) {
-        break;
-      }
-      const [, propertyIndent, key, rawValue] = property;
-      if (propertyIndent.length <= rawIndent.length) {
-        break;
-      }
-      output[key] = cleanValue(rawValue);
-      index += 1;
+    const [, rawIndent, rawInlineValue] = section;
+    const sectionIndent = rawIndent.length;
+    const inlineValue = cleanValue(rawInlineValue);
+    if (inlineValue && inlineValue !== '[]') {
+      values.push(inlineValue);
     }
 
-    index -= 1;
-    outputs.push(output);
+    for (let nestedIndex = index + 1; nestedIndex < lines.length; nestedIndex += 1) {
+      const line = lines[nestedIndex];
+      if (!line.trim()) {
+        continue;
+      }
+
+      const lineIndent = line.match(/^(\s*)/)?.[1].length ?? 0;
+      if (lineIndent <= sectionIndent) {
+        break;
+      }
+
+      const item = line.match(/^(\s*)-\s+(.+)$/);
+      if (!item || item[1].length <= sectionIndent) {
+        continue;
+      }
+
+      const rawItem = cleanValue(item[2]);
+      const objectStart = rawItem.match(/^([a-z_]+):\s*(.*)$/);
+      if (!objectStart) {
+        values.push(rawItem);
+        continue;
+      }
+
+      const objectValue = {
+        [objectStart[1]]: cleanValue(objectStart[2])
+      };
+
+      for (let propertyIndex = nestedIndex + 1; propertyIndex < lines.length; propertyIndex += 1) {
+        const propertyLine = lines[propertyIndex];
+        if (!propertyLine.trim()) {
+          continue;
+        }
+
+        const nextItem = propertyLine.match(/^(\s*)-\s+(.+)$/);
+        if (nextItem && nextItem[1].length === item[1].length) {
+          break;
+        }
+
+        const property = propertyLine.match(/^(\s+)([a-z_]+):\s*(.*)$/);
+        if (!property || property[1].length <= item[1].length) {
+          break;
+        }
+        objectValue[property[2]] = cleanValue(property[3]);
+      }
+
+      values.push(objectValue);
+    }
   }
 
-  return outputs;
+  return values;
+}
+
+function extractWorkflowInputs(workflowText) {
+  return extractWorkflowList(workflowText, 'inputs')
+    .map((input) => (typeof input === 'string' ? input : input.path))
+    .filter(Boolean);
+}
+
+function extractWorkflowOutputs(workflowText) {
+  return extractWorkflowList(workflowText, 'outputs')
+    .map((output) => (typeof output === 'string' ? { path: output } : output))
+    .filter((output) => output.path);
 }
 
 function validateArtifactTemplates(root, agent, manifest, documentPath, errors) {
@@ -330,8 +385,22 @@ function validateWorkflow(root, agentPath, agentRoot, agentId, workflowPath, err
   }
 
   const outputs = extractWorkflowOutputs(workflowText);
+  const outputByPath = new Map();
+  for (const inputPath of extractWorkflowInputs(workflowText)) {
+    safeRunArtifactPath(agentRoot, inputPath, `${agentId} workflow input`, errors);
+  }
   for (const output of outputs) {
-    const requiredKeys = REQUIRED_OUTPUT_METADATA.get(output.path) ?? [];
+    safeRunArtifactPath(agentRoot, output.path, `${agentId} workflow output`, errors);
+    outputByPath.set(output.path, output);
+  }
+
+  const requiredMetadata = REQUIRED_OUTPUT_METADATA_BY_AGENT.get(agentId) ?? new Map();
+  for (const [requiredPath, requiredKeys] of requiredMetadata) {
+    const output = outputByPath.get(requiredPath);
+    if (!output) {
+      pushError(errors, `${agentId} workflow missing required workflow output: ${requiredPath}`);
+      continue;
+    }
     for (const key of requiredKeys) {
       if (!output[key]) {
         pushError(errors, `${agentId} workflow output ${output.path} must declare ${key}.`);

@@ -1,18 +1,33 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { loadAgent } from './catalog.js';
-import { resolveAgentProjectPath } from './manifest.js';
+import { isAnyAbsolute, resolveAgentProjectPath, resolveRunArtifactPath } from './manifest.js';
 import { loadInstalledWorkflow, loadWorkflow } from './workflow.js';
 
 function defaultRunId() {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
+function validateRunId(runId) {
+  if (
+    typeof runId !== 'string' ||
+    runId.trim() === '' ||
+    runId !== runId.trim() ||
+    runId === '.' ||
+    runId === '..' ||
+    /[\\/]/.test(runId) ||
+    isAnyAbsolute(runId)
+  ) {
+    throw new Error(`run_id must be a plain directory name: ${runId}`);
+  }
+  return runId;
+}
+
 export function createRun(repoRoot, options) {
   const agentId = options.agentId;
   const agent = loadAgent(repoRoot, agentId);
   const workflow = loadWorkflow(repoRoot, agentId);
-  const runId = options.runId ?? defaultRunId();
+  const runId = validateRunId(options.runId ?? defaultRunId());
   const projectRoot = resolve(options.project);
   const runRoot = options.runRoot
     ? resolve(options.runRoot)
@@ -44,9 +59,9 @@ export function createRun(repoRoot, options) {
 
 export function createInstalledRun(installedAgent, options) {
   const workflow = loadInstalledWorkflow(installedAgent);
-  const runId = options.runId ?? defaultRunId();
+  const runId = validateRunId(options.runId ?? defaultRunId());
   const projectRoot = resolve(options.project);
-  const runRoot = options.runRoot ? resolve(options.runRoot) : installedAgent.runRoot;
+  const runRoot = resolveInstalledRunRoot(installedAgent, options.runRoot);
   const runDir = join(runRoot, runId);
   const stateFile = installedAgent.stateFile;
   const statePath = join(runDir, stateFile);
@@ -71,6 +86,20 @@ export function createInstalledRun(installedAgent, options) {
 
   saveRunState(runDir, state, { stateFile });
   return { runDir, state, stateFile, statePath };
+}
+
+function isInside(childPath, parentPath) {
+  const relativePath = relative(parentPath, childPath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAnyAbsolute(relativePath));
+}
+
+function resolveInstalledRunRoot(installedAgent, runRootOverride) {
+  const installDir = resolve(installedAgent.installDir);
+  const runRoot = runRootOverride ? resolve(runRootOverride) : resolve(installedAgent.runRoot);
+  if (runRoot === installDir || !isInside(runRoot, installDir)) {
+    throw new Error('Installed run root must be inside install_dir.');
+  }
+  return runRoot;
 }
 
 export function loadRunState(runDir, options = {}) {
@@ -118,18 +147,19 @@ function artifactFormat(artifact) {
 function missingOutputArtifacts(runDir, phase) {
   return phase.outputs
     .map(artifactPath)
-    .filter((artifact) => !existsSync(join(runDir, artifact)));
+    .filter((artifact) => !existsSync(resolveRunArtifactPath(runDir, artifact, `phase ${phase.id} output artifact`)));
 }
 
 function validateOutputArtifacts(runDir, phase) {
   for (const artifact of phase.outputs) {
     const path = artifactPath(artifact);
+    const artifactFile = resolveRunArtifactPath(runDir, path, `phase ${phase.id} output artifact`);
     if (artifactFormat(artifact) !== 'json') {
       continue;
     }
 
     try {
-      JSON.parse(readFileSync(join(runDir, path), 'utf8'));
+      JSON.parse(readFileSync(artifactFile, 'utf8'));
     } catch (error) {
       throw new Error(`Invalid JSON output artifact for phase ${phase.id}: ${path}`);
     }

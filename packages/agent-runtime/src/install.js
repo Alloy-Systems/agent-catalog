@@ -47,9 +47,24 @@ function requireFile(path, label) {
   }
 }
 
-function isInside(childPath, parentPath) {
-  const relativePath = relative(parentPath, childPath);
-  return relativePath === '' || (!relativePath.startsWith('..') && !isAnyAbsolute(relativePath));
+function toPosixRelativePath(fromPath, toPath, label) {
+  const relativePath = relative(fromPath, toPath);
+  if (relativePath === '' || relativePath.startsWith('..') || isAnyAbsolute(relativePath)) {
+    throw new Error(`${label} must be inside ${fromPath}.`);
+  }
+  return relativePath.replaceAll('\\', '/');
+}
+
+function resolveInstalledRelativePath(basePath, candidatePath, label, containerLabel) {
+  if (isAnyAbsolute(candidatePath)) {
+    throw new Error(`${label} must be relative and inside ${containerLabel}. Reinstall the agent to migrate this index.`);
+  }
+
+  try {
+    return resolvePackageRelativePath(basePath, candidatePath, label);
+  } catch (error) {
+    throw new Error(`${label} must be relative and inside ${containerLabel}: ${error.message}. Reinstall the agent to migrate this index.`);
+  }
 }
 
 function requireConfigString(config, key) {
@@ -189,7 +204,9 @@ export function listInstalledAgents(projectRoot) {
         id: config.agent_id ?? entry.name,
         installDir,
         configPath,
-        runRoot: config.run_root,
+        runRoot: typeof config.run_root === 'string' && !isAnyAbsolute(config.run_root)
+          ? join(installDir, config.run_root)
+          : config.run_root,
         stateFile: config.state_file ?? 'state.json',
         config
       };
@@ -221,14 +238,24 @@ export function loadInstalledAgent(projectRoot, agentId) {
   if (resolve(installedAgent.installDir) !== expectedInstallDir) {
     throw new Error(`Installed agent directory mismatch for ${installedAgent.id}: ${installedAgent.installDir}`);
   }
-  if (config.install_dir && resolve(config.install_dir) !== expectedInstallDir) {
+  const installDir = requireConfigString(config, 'install_dir');
+  const safeInstallDir = resolveInstalledRelativePath(
+    resolvedProjectRoot,
+    installDir,
+    'Installed agent index install_dir',
+    'project root'
+  );
+  if (join(resolvedProjectRoot, safeInstallDir) !== expectedInstallDir) {
     throw new Error(`Installed agent index install_dir must resolve to ${expectedInstallDir}`);
   }
 
-  const runRoot = resolve(requireConfigString(config, 'run_root'));
-  if (!isInside(runRoot, expectedInstallDir) || runRoot === expectedInstallDir) {
-    throw new Error('Installed agent index run_root must be inside install_dir.');
-  }
+  const safeRunRoot = resolveInstalledRelativePath(
+    expectedInstallDir,
+    requireConfigString(config, 'run_root'),
+    'Installed agent index run_root',
+    'install_dir'
+  );
+  const runRoot = join(expectedInstallDir, safeRunRoot);
   const stateFile = requireConfigString(config, 'state_file');
   requirePlainStateFile(stateFile);
 
@@ -326,8 +353,8 @@ export function installAgent(repoRoot, options) {
     mode,
     catalog_root: resolve(repoRoot),
     agent_path: agentPath,
-    install_dir: installDir,
-    run_root: runRoot,
+    install_dir: toPosixRelativePath(projectRoot, installDir, 'Installed agent index install_dir'),
+    run_root: toPosixRelativePath(installDir, runRoot, 'Installed agent index run_root'),
     state_file: agent.artifacts.state_file,
     manifest_snapshot: {
       schema_version: agent.schema_version,

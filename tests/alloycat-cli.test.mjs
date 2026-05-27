@@ -172,7 +172,7 @@ test('install without project option resolves the project root from nested cwd',
 
     assert.equal(result.stdout.includes(`Project root: ${tempRoot}`), true);
     assert.equal(config.agent_id, 'interaction-auditor');
-    assert.equal(config.run_root, join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs'));
+    assert.equal(config.run_root, 'runs');
     assert.equal(existsSync(join(nested, '.alloycat')), false);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -401,6 +401,74 @@ test('next exits nonzero when current phase outputs are missing', () => {
     const next = runCli(['next'], { cwd: projectRoot });
     assert.notEqual(next.status, 0);
     assert.match(next.stderr, /Missing output artifacts for phase resolve-project-root/);
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('init rejects run root overrides outside the installed agent state', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-runroot-project-'));
+  const outsideRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-runroot-outside-'));
+  try {
+    const install = runCli(['install', 'interaction-auditor'], { cwd: projectRoot });
+    assert.equal(install.status, 0, install.stderr);
+
+    const init = runCli([
+      'init',
+      '--run-root',
+      outsideRoot,
+      '--run-id',
+      'blocked-run'
+    ], { cwd: projectRoot });
+
+    assert.notEqual(init.status, 0);
+    assert.match(init.stderr, /run root.*inside.*install_dir/i);
+    assert.equal(existsSync(join(outsideRoot, 'blocked-run', 'state.json')), false);
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+    rmSync(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test('init rejects run ids with path separators', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-runid-project-'));
+  try {
+    const install = runCli(['install', 'interaction-auditor'], { cwd: projectRoot });
+    assert.equal(install.status, 0, install.stderr);
+
+    const init = runCli([
+      'init',
+      '--run-id',
+      '../blocked-run'
+    ], { cwd: projectRoot });
+
+    assert.notEqual(init.status, 0);
+    assert.match(init.stderr, /run_id.*plain/i);
+    assert.equal(
+      existsSync(join(projectRoot, '.alloycat', 'agents', 'interaction-auditor', 'blocked-run', 'state.json')),
+      false
+    );
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('legacy absolute installed indexes explain that reinstall is required', () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-legacy-index-'));
+  try {
+    const install = runCli(['install', 'interaction-auditor'], { cwd: projectRoot });
+    assert.equal(install.status, 0, install.stderr);
+
+    const configPath = join(projectRoot, '.alloycat', 'agents', 'interaction-auditor', 'index.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.install_dir = join(projectRoot, '.alloycat', 'agents', 'interaction-auditor');
+    config.run_root = join(projectRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs');
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+    const status = runCli(['status'], { cwd: projectRoot });
+
+    assert.notEqual(status.status, 0);
+    assert.match(status.stderr, /reinstall/i);
   } finally {
     rmSync(projectRoot, { recursive: true, force: true });
   }

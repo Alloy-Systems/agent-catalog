@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { extractMarkdownSection } from './manifest.js';
+import { extractMarkdownSection, resolveRunArtifactPath } from './manifest.js';
 import { loadInstalledWorkflow, loadWorkflow } from './workflow.js';
 import { getCurrentPhase, loadRunState } from './runs.js';
 
@@ -27,7 +27,7 @@ function listArtifacts(title, runDir, artifacts = []) {
   } else {
     for (const artifact of artifacts) {
       const path = artifactPath(artifact);
-      lines.push(`- ${join(runDir, path)}`);
+      lines.push(`- ${resolveRunArtifactPath(runDir, path, `${title} artifact`)}`);
       if (typeof artifact === 'object') {
         if (artifactFormat(artifact)) {
           lines.push(`  - Format: ${artifactFormat(artifact)}`);

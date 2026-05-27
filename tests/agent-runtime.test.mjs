@@ -266,7 +266,8 @@ test('linked install writes project config, run root, readme, and gitignore entr
     assert.equal(config.mode, 'linked');
     assert.equal(config.catalog_root, repoRoot);
     assert.equal(config.agent_path, join(repoRoot, 'agents', 'interaction-auditor'));
-    assert.equal(config.run_root, runRoot);
+    assert.equal(config.install_dir, '.alloycat/agents/interaction-auditor');
+    assert.equal(config.run_root, 'runs');
     assert.equal(config.installed_package_dir, 'package');
     assert.equal(config.agent_document_path, 'agent.md');
     assert.equal(config.workflow_path, 'workflow.yaml');
@@ -453,6 +454,78 @@ test('installed agent index rejects run roots outside the project install direct
   } finally {
     rmSync(tempProject, { recursive: true, force: true });
     rmSync(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test('installed agent index rejects absolute run roots before creating runs', () => {
+  const tempProject = mkdtempSync(join(tmpdir(), 'alloycat-installed-absolute-project-'));
+  const outsideRoot = mkdtempSync(join(tmpdir(), 'alloycat-installed-absolute-outside-'));
+  try {
+    installAgent(repoRoot, {
+      agentId: 'interaction-auditor',
+      project: tempProject
+    });
+
+    const configPath = join(tempProject, '.alloycat', 'agents', 'interaction-auditor', 'index.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.run_root = outsideRoot;
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+    assert.throws(
+      () => loadInstalledAgent(tempProject, 'interaction-auditor'),
+      /run_root.*relative/
+    );
+    assert.equal(existsSync(join(outsideRoot, 'blocked-run', 'state.json')), false);
+  } finally {
+    rmSync(tempProject, { recursive: true, force: true });
+    rmSync(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test('installed runs reject run root overrides outside the install directory', () => {
+  const tempProject = mkdtempSync(join(tmpdir(), 'alloycat-installed-runroot-project-'));
+  const outsideRoot = mkdtempSync(join(tmpdir(), 'alloycat-installed-runroot-outside-'));
+  try {
+    installAgent(repoRoot, {
+      agentId: 'interaction-auditor',
+      project: tempProject
+    });
+    const installedAgent = loadInstalledAgent(tempProject, 'interaction-auditor');
+
+    assert.throws(
+      () => createInstalledRun(installedAgent, {
+        project: tempProject,
+        runRoot: outsideRoot,
+        runId: 'blocked-run'
+      }),
+      /run root.*inside.*install_dir/i
+    );
+    assert.equal(existsSync(join(outsideRoot, 'blocked-run', 'state.json')), false);
+  } finally {
+    rmSync(tempProject, { recursive: true, force: true });
+    rmSync(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test('installed runs reject run ids with path separators', () => {
+  const tempProject = mkdtempSync(join(tmpdir(), 'alloycat-installed-runid-project-'));
+  try {
+    installAgent(repoRoot, {
+      agentId: 'interaction-auditor',
+      project: tempProject
+    });
+    const installedAgent = loadInstalledAgent(tempProject, 'interaction-auditor');
+
+    assert.throws(
+      () => createInstalledRun(installedAgent, {
+        project: tempProject,
+        runId: '../blocked-run'
+      }),
+      /run_id.*plain/i
+    );
+    assert.equal(existsSync(join(installedAgent.installDir, 'blocked-run', 'state.json')), false);
+  } finally {
+    rmSync(tempProject, { recursive: true, force: true });
   }
 });
 

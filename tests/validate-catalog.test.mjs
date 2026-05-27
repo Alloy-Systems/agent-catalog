@@ -78,7 +78,7 @@ test('catalog validation rejects catalog metadata outside id and path', () => {
       catalogPath,
       readFileSync(catalogPath, 'utf8').replace(
         '    path: agents/interaction-auditor',
-        '    path: agents/interaction-auditor\n    status: draft'
+        '    path: agents/interaction-auditor\n    display-name: Hidden Metadata'
       )
     );
 
@@ -89,7 +89,32 @@ test('catalog validation rejects catalog metadata outside id and path', () => {
     });
 
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /catalog.yaml entry.*only id and path/i);
+    assert.match(result.stderr, /catalog.yaml entry.*only id and path.*display-name/i);
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+  }
+});
+
+test('catalog validation rejects dotted catalog metadata keys', () => {
+  const tempRepo = copyRepoFixture(repoRoot, 'alloycat-validator-catalog-dotted-keys-');
+  try {
+    const catalogPath = join(tempRepo, 'catalog.yaml');
+    writeFileSync(
+      catalogPath,
+      readFileSync(catalogPath, 'utf8').replace(
+        '    path: agents/interaction-auditor',
+        '    path: agents/interaction-auditor\n    display.name: Hidden Metadata'
+      )
+    );
+
+    const result = runValidation({
+      env: {
+        ALLOYCAT_VALIDATE_ROOT: tempRepo
+      }
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /catalog.yaml entry.*only id and path.*display.name/i);
   } finally {
     rmSync(tempRepo, { recursive: true, force: true });
   }
@@ -152,6 +177,131 @@ test('catalog validation rejects unsafe artifact and workflow paths', () => {
     assert.match(result.stderr, /must be relative/i);
     assert.match(result.stderr, /state_file.*plain file name/i);
     assert.match(result.stderr, /must not contain \.\. segments/i);
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+  }
+});
+
+test('catalog validation rejects unsafe workflow run artifact paths', () => {
+  const tempRepo = copyRepoFixture(repoRoot, 'alloycat-validator-run-artifacts-');
+  try {
+    const workflowPath = join(tempRepo, 'agents', 'interaction-auditor', 'workflow.yaml');
+    writeFileSync(
+      workflowPath,
+      readFileSync(workflowPath, 'utf8')
+        .replace('path: 00-project-root.json', 'path: ../outside.json')
+        .replace('- 00-project-root.json', '- ../input.json')
+    );
+
+    const result = runValidation({
+      env: {
+        ALLOYCAT_VALIDATE_ROOT: tempRepo
+      }
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /workflow input.*must not contain \.\. segments/i);
+    assert.match(result.stderr, /workflow output.*must not contain \.\. segments/i);
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+  }
+});
+
+test('catalog validation rejects unsafe string workflow output paths', () => {
+  const tempRepo = copyRepoFixture(repoRoot, 'alloycat-validator-string-output-');
+  try {
+    const workflowPath = join(tempRepo, 'agents', 'interaction-auditor', 'workflow.yaml');
+    writeFileSync(
+      workflowPath,
+      readFileSync(workflowPath, 'utf8').replace(
+        'outputs:\n      - path: 00-project-root.json',
+        'outputs:\n      - ../outside.json\n      - path: 00-project-root.json'
+      )
+    );
+
+    const result = runValidation({
+      env: {
+        ALLOYCAT_VALIDATE_ROOT: tempRepo
+      }
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /workflow output.*must not contain \.\. segments/i);
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+  }
+});
+
+test('catalog validation rejects missing required workflow output paths', () => {
+  const tempRepo = copyRepoFixture(repoRoot, 'alloycat-validator-required-output-');
+  try {
+    const workflowPath = join(tempRepo, 'agents', 'interaction-auditor', 'workflow.yaml');
+    writeFileSync(
+      workflowPath,
+      readFileSync(workflowPath, 'utf8').replace(
+        'path: 00-project-root.json',
+        'path: renamed-project-root.json'
+      )
+    );
+
+    const result = runValidation({
+      env: {
+        ALLOYCAT_VALIDATE_ROOT: tempRepo
+      }
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /missing required workflow output.*00-project-root\.json/i);
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+  }
+});
+
+test('catalog validation does not require interaction auditor outputs for other agents', () => {
+  const tempRepo = copyRepoFixture(repoRoot, 'alloycat-validator-second-agent-');
+  try {
+    const sourceAgentPath = join(tempRepo, 'agents', 'interaction-auditor');
+    const secondAgentPath = join(tempRepo, 'agents', 'minimal-agent');
+    cpSync(sourceAgentPath, secondAgentPath, { recursive: true });
+
+    const agentDocumentPath = join(secondAgentPath, 'agent.md');
+    writeFileSync(
+      agentDocumentPath,
+      readFileSync(agentDocumentPath, 'utf8')
+        .replace('id: interaction-auditor', 'id: minimal-agent')
+        .replace('name: Alloy Interaction Auditor', 'name: Minimal Agent')
+    );
+    writeFileSync(
+      join(secondAgentPath, 'workflow.yaml'),
+      [
+        'workflow:',
+        '  id: minimal-agent',
+        '  name: Minimal Agent',
+        '  schema_version: 1',
+        '',
+        'phases:',
+        '  - id: single-phase',
+        '    title: Single Phase',
+        '    description: Produce one minimal artifact.',
+        '    prompt: prompts/00-resolve-project-root.md',
+        '    outputs:',
+        '      - path: minimal-output.md',
+        '        format: markdown',
+        '        description: Minimal output.'
+      ].join('\n')
+    );
+    writeFileSync(
+      join(tempRepo, 'catalog.yaml'),
+      `${readFileSync(join(tempRepo, 'catalog.yaml'), 'utf8').trimEnd()}\n  - id: minimal-agent\n    path: agents/minimal-agent\n`
+    );
+
+    const result = runValidation({
+      env: {
+        ALLOYCAT_VALIDATE_ROOT: tempRepo
+      }
+    });
+
+    assert.equal(result.status, 0, result.stderr);
   } finally {
     rmSync(tempRepo, { recursive: true, force: true });
   }

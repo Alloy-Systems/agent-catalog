@@ -11,5 +11,6 @@ export {
   parseAgentMarkdown,
   resolveAgentProjectPath,
   resolveArtifactTemplate,
-  resolvePackageRelativePath
+  resolvePackageRelativePath,
+  resolveRunArtifactPath
 } from './manifest.js';

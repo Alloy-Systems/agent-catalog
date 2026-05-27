@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
@@ -95,6 +95,11 @@ function resolveDefaultCommandPrefix() {
 }
 
 const defaultCommandPrefix = resolveDefaultCommandPrefix();
+
+function isInsidePath(childPath, parentPath) {
+  const relativePath = relative(parentPath, childPath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath));
+}
 
 function parseOptions(args) {
   const options = {};
@@ -264,16 +269,14 @@ function resolveActiveRun(options, explicitAgentId, action) {
     const runDir = resolve(options.run);
     const installedAgents = listInstalledAgents(projectRoot)
       .filter((agent) => !explicitAgentId || agent.id === explicitAgentId)
-      .filter((agent) => {
-        const relativePath = runDir.startsWith(agent.runRoot) ? runDir.slice(agent.runRoot.length) : null;
-        return relativePath !== null && (relativePath === '' || relativePath.startsWith(sep));
-      });
+      .map((agent) => loadInstalledAgent(projectRoot, agent.id))
+      .filter((agent) => isInsidePath(runDir, agent.runRoot));
     if (installedAgents.length !== 1) {
       throw new Error(`Agent id is required for ${action} because the run does not identify exactly one installed agent: ${runDir}`);
     }
     return {
       runDir,
-      installedAgent: loadInstalledAgent(projectRoot, installedAgents[0].id)
+      installedAgent: installedAgents[0]
     };
   }
 

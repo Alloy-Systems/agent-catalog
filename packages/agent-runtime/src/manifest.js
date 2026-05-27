@@ -91,6 +91,35 @@ export function resolvePackageRelativePath(basePath, candidatePath, label) {
   return normalizedPath;
 }
 
+export function resolveRunArtifactPath(runDir, candidatePath, label) {
+  if (typeof candidatePath !== 'string' || candidatePath.trim() === '') {
+    throw new Error(`${label} must be a non-empty string.`);
+  }
+  if (candidatePath.includes('\\')) {
+    throw new Error(`${label} must use POSIX separators: ${candidatePath}`);
+  }
+  if (isAnyAbsolute(candidatePath)) {
+    throw new Error(`${label} must be relative: ${candidatePath}`);
+  }
+  if (candidatePath.split('/').includes('..')) {
+    throw new Error(`${label} must not contain .. segments: ${candidatePath}`);
+  }
+
+  const normalizedPath = posix.normalize(candidatePath);
+  if (normalizedPath === '.') {
+    throw new Error(`${label} must not resolve to the run directory: ${candidatePath}`);
+  }
+
+  const basePath = resolve(runDir);
+  const fullPath = resolve(basePath, normalizedPath);
+  const relativePath = relative(basePath, fullPath);
+  if (relativePath === '' || relativePath.startsWith('..') || isAnyAbsolute(relativePath)) {
+    throw new Error(`${label} escapes the run directory: ${candidatePath}`);
+  }
+
+  return fullPath;
+}
+
 export function parseAgentMarkdown(source) {
   const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   if (!match) {

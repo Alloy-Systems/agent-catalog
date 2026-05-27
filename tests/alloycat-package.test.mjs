@@ -118,6 +118,25 @@ test('staged packaged validator rejects invalid packaged manifests', () => {
   assert.match(result.stderr, /unsupported.*status/i);
 });
 
+test('staged packaged validator rejects unsafe workflow artifact paths', () => {
+  packAlloycat();
+  const stageRoot = join(repoRoot, 'packages', 'alloycat', 'dist-package');
+  const workflowPath = join(stageRoot, 'catalog', 'agents', 'interaction-auditor', 'workflow.yaml');
+  writeFileSync(
+    workflowPath,
+    readFileSync(workflowPath, 'utf8').replace('path: 00-project-root.json', 'path: ../outside.json')
+  );
+
+  const result = spawnSync(process.execPath, [join(stageRoot, 'src', 'index.js'), 'validate'], {
+    cwd: stageRoot,
+    encoding: 'utf8',
+    shell: false
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /workflow output.*must not contain \.\. segments/i);
+});
+
 test('packed alloycat package includes CI repository metadata when provided', () => {
   const tarball = packAlloycat({
     env: {
