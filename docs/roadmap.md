@@ -1,60 +1,128 @@
 # Alloy Agent Catalog Roadmap
 
-This roadmap tracks the path from the current MVP to a reusable catalog of installable workflow agents. It is based on the current repository state, the published `alloycat` package, and the original Interaction Audit workflow kit design.
+This roadmap tracks the path from the current MVP to a reusable catalog of installable workflow agents. It reflects the current repository state, the published `alloycat@0.1.8` package, and the Interaction Auditor workflow kit design.
 
 ## Current Baseline
 
-- `alloycat` is published on npm, while the repository may contain unreleased changes for the next patch.
-- `interaction-auditor` has a phase-gated workflow with durable run state.
-- `install`, `init`, `remind`, `next`, `status`, and `uninstall` are implemented in the current repository.
-- `init` can infer the installed agent when the project has one installed agent.
-- `next` validates required output artifacts before advancing phases.
+- `alloycat@0.1.8` is published on npm.
+- Package publishing uses GitHub trusted publishing from release tags.
+- `interaction-auditor` is the first catalog agent.
+- `interaction-auditor` uses canonical `agent.md` frontmatter plus selected Markdown sections as its manifest and prompt context.
+- Rendered prompts include agent role, focused operating rules, evidence rules, forbidden actions, phase metadata, artifact contracts, and normalized Markdown heading levels.
+- `install`, `i`, `init`, `remind`, `next`, `status`, and `uninstall` are implemented.
+- `init`, `remind`, `next`, and `status` can infer the installed agent and active run when the project state is unambiguous.
+- `next` validates required output artifact existence before advancing phases.
 - JSON artifacts are checked for valid JSON syntax.
 - The workflow stops explicitly at `user_gate: true` phases.
-- Package publishing uses GitHub trusted publishing from release tags.
-
-## Immediate Release
-
-### 1. Release current local changes
-
-Goal: publish the corrected project cleanup behavior and the current `interaction-auditor` package id.
-
-Behavior:
-
 - `alloycat uninstall <agent-id>` removes only `.alloycat/agents/<agent-id>/`.
-- `alloycat uninstall` removes the full `.alloycat/` project state and cleans `.gitignore`.
-- Running `alloycat uninstall` when no project state exists succeeds without changing files.
+- `alloycat uninstall` removes all `.alloycat/` project state and cleans `.gitignore`.
+- Project-local installs store agent state under `.alloycat/`, which is ignored by Git.
 
-Acceptance checks:
+## Completed Milestones
 
-- Runtime tests cover agent-only and full-project uninstall.
-- CLI tests cover both command forms.
-- Package smoke tests cover both command forms through `npx`.
+### 1. Publish the MVP CLI package
 
-Release checklist:
+Status: completed.
 
-- Release patch is published and smoke-tested from npm.
+Delivered behavior:
+
+- `alloycat` is published on npm.
+- `npx alloycat i` and `npx alloycat install` install catalog agents into a target project.
+- CLI hints use short commands such as `npx alloycat init`.
+- Release automation bumps package versions, tags releases, pushes to GitHub, and publishes through trusted publishing.
+
+Verification now covered by:
+
+- CLI tests.
+- Package smoke tests through `npx`.
+- Release workflow tests.
+- Published-package smoke checks.
+
+### 2. Implement project cleanup semantics
+
+Status: completed.
+
+Delivered behavior:
+
+- `alloycat uninstall <agent-id>` removes only the selected installed agent.
+- `alloycat uninstall` removes all alloycat project state.
+- Running full-project uninstall when alloycat state is absent succeeds without changing files.
+- `.gitignore` cleanup follows the uninstall scope.
+
+Verification now covered by:
+
+- Runtime tests for agent-only and full-project uninstall.
+- CLI tests for both command forms.
+- Package smoke tests for both command forms through `npx`.
+
+### 3. Make `agent.md` the canonical agent manifest
+
+Status: completed.
+
+Delivered behavior:
+
+- `agent.md` frontmatter is the source of agent id, display metadata, runtime model, workflow path, artifact paths, host adapter declarations, prompt-context sections, and quality gates.
+- `alloycat list` and `alloycat info` read agent metadata from `agent.md`.
+- `install`, `init`, `status`, `remind`, `next`, and agent-scoped `uninstall` use manifest-backed paths.
+- Validation rejects malformed frontmatter, missing prompt-context sections, unsafe artifact paths, and workflow id mismatches.
+- Declared host adapter directories are validated as package assets.
+
+Verification now covered by:
+
+- Runtime manifest parsing tests.
+- CLI behavior tests.
+- Catalog validation tests.
+- Package asset tests.
+
+### 4. Tighten rendered prompt context
+
+Status: completed.
+
+Delivered behavior:
+
+- Rendered prompts include `Role` as the first `Agent Context` section.
+- General operating rules are focused on the current phase instead of listing future workflow phases.
+- Phase prompt headings are demoted under `## Phase Instructions`.
+- Agent context sections are separated by valid Markdown blank lines.
+- Prompt tests lock role ordering and prevent old noisy workflow wording from returning.
+
+Verification now covered by:
+
+- Runtime prompt rendering tests.
+- Published-package smoke checks through `npx alloycat`.
 
 ## Near-Term Stabilization
 
-### 2. Make `agent.md` the canonical agent manifest
+### 5. Reduce manual run commands
 
-Goal: replace split agent metadata and agent README files with one canonical Markdown manifest.
+Goal: make normal usage feel like one guided workflow, not a sequence of memorized commands.
+
+Planned behavior:
+
+- `alloycat i` / `alloycat install` remains the normal first command.
+- After the user selects and confirms an agent, install creates the first run and renders the first phase task immediately.
+- `init`, `next`, and `remind` remain available for debugging, recovery, and explicit run control.
+- Installed project state is used to infer agent and active run where unambiguous.
+- Multiple installed agents never select silently.
+- Multiple active runs never select silently.
+- Reinstalling an already installed agent does not silently create duplicate ambiguous runs.
 
 Why this matters:
 
-- keeps agent metadata and human-readable documentation together;
-- lets runtime derive workflow paths, run artifact roots, and host adapter references from the manifest;
-- lets prompt rendering include explicitly selected agent-level rules.
+- Makes first-time usage simpler.
+- Keeps current debug controls available.
+- Preserves correctness when more agents are added.
+- Moves the user experience closer to "install an agent and start working".
 
 Acceptance checks:
 
-- `alloycat list` and `alloycat info` read display metadata from `agent.md`;
-- `install`, `init`, `status`, `remind`, `next`, and agent-scoped `uninstall` use manifest-backed agent paths; full-project `uninstall` continues to remove the runtime project state root;
-- skeleton adapter directories with README or host-specific entry files exist for hosts declared in `agent.md`; bare placeholders do not satisfy validation;
-- validation rejects malformed frontmatter, missing prompt-context sections, unsafe artifact paths, and workflow id mismatches.
+- Installing one selected agent creates the initial run and prints the first phase without requiring a separate `init`.
+- If the selected agent is already installed, the CLI resumes, asks, or errors with a clear next action.
+- Multiple installed agents are handled explicitly.
+- Multiple active runs are handled explicitly.
+- Runtime, CLI, and package smoke tests cover first-run install behavior.
 
-### 3. Add schemas for critical JSON artifacts
+### 6. Add schemas for critical JSON artifacts
 
 Goal: validate artifact shape, not just JSON syntax.
 
@@ -75,10 +143,11 @@ Acceptance checks:
 
 - Invalid required fields fail validation.
 - Minimal valid examples pass validation.
-- `workflow.yaml` declares `schema:` references for initial critical JSON workflow artifacts, excluding reusable/example-only schemas, and rendered prompts display those workflow-declared schema paths.
+- `workflow.yaml` declares `schema:` references for initial critical JSON workflow artifacts, excluding reusable/example-only schemas.
+- Rendered prompts display workflow-declared schema paths.
 - `next` refuses to advance when a schema-backed output artifact fails its declared schema, with runtime and CLI coverage.
 
-### 4. Activate agent package directories
+### 7. Activate agent package directories
 
 Goal: turn schemas, templates, adapters, tests, fixtures, examples, and package changelog from placeholders into validated package assets.
 
@@ -96,11 +165,11 @@ Acceptance checks:
 - package smoke tests prove required assets are shipped;
 - agent-level test definitions are executed by source and packaged validation.
 
-### 5. Enforce branch plans during phase advancement
+### 8. Enforce branch plans during phase advancement
 
 Goal: make `05-branch-plan.json` control which audit tracks run.
 
-Behavior:
+Planned behavior:
 
 - `branch_key` phases are skipped when the branch plan disables that track.
 - Disabled tracks are recorded in run state.
@@ -119,28 +188,28 @@ Acceptance checks:
 - CLI tests show skipped phases clearly.
 - Package smoke tests verify branch skipping through `npx`.
 
-### 6. Improve prompt contract and artifact templates
+### 9. Improve phase prompt contracts and artifact templates
 
 Goal: make each phase prompt precise enough for real project audits.
 
 Prompt contract:
 
-- agent name and description
-- phase goal
-- exact input files
-- exact output files
-- allowed actions
-- forbidden actions
-- evidence requirements
-- stop conditions
-- validation command
+- agent name and description;
+- phase goal;
+- exact input files;
+- exact output files;
+- allowed actions;
+- forbidden actions;
+- evidence requirements;
+- stop conditions;
+- validation command.
 
 Templates:
 
-- scope confirmation report
-- branch plan JSON
-- final report
-- finding format
+- scope confirmation report;
+- branch plan JSON;
+- final report;
+- finding format.
 
 Why this matters:
 
@@ -156,7 +225,7 @@ Acceptance checks:
 
 ## Host Integration
 
-### 7. Reconcile adapter command model before host adapters
+### 10. Reconcile adapter command model before host adapters
 
 Goal: make host adapter expectations match real CLI behavior.
 
@@ -171,7 +240,7 @@ Acceptance checks:
 - adapter docs use the same command model as the CLI;
 - command-reference validation is deferred until adapter command references have a machine-readable shape.
 
-### 8. Build thin host adapters
+### 11. Build thin host adapters
 
 Goal: make the catalog usable from host environments without copying workflow logic into each host.
 
@@ -201,35 +270,9 @@ Acceptance checks:
 - Adapter documentation explains how a host should call the workflow.
 - Manual verification covers install, init, remind, next, user gate stop, and uninstall.
 
-### 9. Reduce manual run commands
-
-Goal: make normal usage feel like one guided workflow, not a sequence of memorized commands.
-
-Possible direction:
-
-- make `alloycat i` / `alloycat install` the normal first-run command: after the user selects and confirms an agent, install it, create the first run, and render the first phase task immediately;
-- keep `init`, `next`, and `remind` for debugging and explicit run recovery;
-- add a higher-level `run` or `start` command later;
-- use installed project state to infer agent and active run where unambiguous;
-- show clear errors when multiple agents or active runs exist.
-
-Why this matters:
-
-- Keeps current debug controls available.
-- Makes first-time usage simpler.
-- Preserves correctness when more agents are added.
-
-Acceptance checks:
-
-- Installing one selected agent creates the initial run and prints the first phase without requiring a separate `init`.
-- If the selected agent is already installed, the CLI does not silently create duplicate ambiguous runs; it resumes, asks, or errors with a clear next action.
-- Multiple installed agents never select silently.
-- Multiple active runs never select silently.
-- UX tests cover the single-agent and multi-agent cases.
-
 ## Catalog Growth
 
-### 10. Add examples and fixtures
+### 12. Add examples and fixtures
 
 Goal: make the agent verifiable against known projects and artifact sets.
 
@@ -251,7 +294,7 @@ Acceptance checks:
 - Manual verification steps are documented.
 - At least one complete Interaction Audit run is captured as an example.
 
-### 11. Strengthen catalog validation
+### 13. Strengthen catalog validation
 
 Goal: make agent status meaningful.
 
@@ -272,7 +315,7 @@ Acceptance checks:
 - Validation rejects status claims without required assets.
 - Tests cover draft, experimental, stable, and invalid fixtures.
 
-### 12. Add new-agent scaffolding
+### 14. Add new-agent scaffolding
 
 Goal: create future agents consistently.
 
@@ -309,4 +352,4 @@ Acceptance checks:
 - multi-run dashboard;
 - vendored install mode.
 
-These are useful later, but they should wait until branch enforcement, schemas, prompt contracts, and host adapters are working.
+These are useful later, but they should wait until first-run install behavior, schema validation, branch enforcement, prompt contracts, and host adapters are working.
