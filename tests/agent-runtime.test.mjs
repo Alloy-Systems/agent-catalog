@@ -654,6 +654,7 @@ test('renders current phase prompt with phase metadata and artifact contracts', 
     assert.match(prompt, /00-project-root\.json/);
     assert.match(prompt, /Format: json/);
     assert.match(prompt, /## Agent Context/);
+    assert.match(prompt, /## Agent Context\n\n### Role\n\nYou are Alloy Interaction Auditor/);
     assert.match(prompt, /### Role/);
     assert.match(prompt, /You are Alloy Interaction Auditor, an audit-only agent/);
     assert.match(prompt, /### Operating Rules/);
