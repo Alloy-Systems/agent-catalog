@@ -158,11 +158,11 @@ async function main() {
     fail(`Tag already exists: ${tagName}`);
   }
 
-  run('npm', ['test'], { cwd: repoRoot });
-  run('npm', ['run', 'validate'], { cwd: repoRoot });
-
   manifest.version = nextVersion;
   writeManifest(manifestPath, manifest);
+
+  run('npm', ['test'], { cwd: repoRoot });
+  run('npm', ['run', 'validate'], { cwd: repoRoot });
 
   run('npm', ['run', 'pack:alloycat'], { cwd: repoRoot });
   run('git', ['diff', '--check'], { cwd: repoRoot });
