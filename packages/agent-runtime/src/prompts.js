@@ -54,7 +54,7 @@ function renderAgentContext(agent) {
   for (const sectionName of sections) {
     const section = extractMarkdownSection(agent.documentBody ?? '', sectionName);
     if (section) {
-      renderedSections.push(`### ${sectionName}`, '', section);
+      renderedSections.push([`### ${sectionName}`, '', section].join('\n'));
     }
   }
 
@@ -62,7 +62,13 @@ function renderAgentContext(agent) {
     return null;
   }
 
-  return ['## Agent Context', '', ...renderedSections].join('\n');
+  return ['## Agent Context', '', renderedSections.join('\n\n')].join('\n');
+}
+
+function demoteMarkdownHeadings(markdown, levels = 2) {
+  return markdown.replace(/^(#{1,6})(\s+)/gm, (_, hashes, space) => {
+    return `${'#'.repeat(Math.min(6, hashes.length + levels))}${space}`;
+  });
 }
 
 export function renderNextPrompt(repoRoot, runDir, options = {}) {
@@ -83,7 +89,9 @@ function getWorkflowPhase(workflow, state) {
 
 function renderWorkflowPrompt(workflow, state, runDir, phase, options = {}) {
   const commandPrefix = options.commandPrefix ?? 'alloycat';
-  const phasePrompt = readFileSync(join(workflow.packageRoot, phase.prompt), 'utf8').trim();
+  const phasePrompt = demoteMarkdownHeadings(
+    readFileSync(join(workflow.packageRoot, phase.prompt), 'utf8').trim()
+  );
   const lines = [
     `# ${workflow.name}`,
     '',

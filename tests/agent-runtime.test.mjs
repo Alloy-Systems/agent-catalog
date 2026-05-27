@@ -654,6 +654,13 @@ test('renders current phase prompt with phase metadata and artifact contracts', 
     assert.match(prompt, /Findings must cite concrete evidence/);
     assert.match(prompt, /### Forbidden Actions/);
     assert.match(prompt, /Do not fix product code during audit mode/);
+    assert.match(prompt, /between phases\.\n\n### Evidence Rules/);
+    assert.match(prompt, /report assembly\.\n\n### Forbidden Actions/);
+    assert.match(prompt, /## Phase Instructions\n\n### Resolve Project Root/);
+    assert.deepEqual(
+      prompt.split(/\r?\n/).filter((line) => /^# /.test(line)),
+      ['# Alloy Interaction Auditor']
+    );
     assert.match(prompt, /then run:/);
     assert.match(prompt, /alloycat next/);
   } finally {
