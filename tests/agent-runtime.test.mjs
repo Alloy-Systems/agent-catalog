@@ -142,13 +142,18 @@ test('loads agent.md frontmatter and selected Markdown sections from disk', () =
   assert.equal(document.manifest.runtime.workflow, 'workflow.yaml');
   assert.equal(document.manifest.artifacts.run_root, '.alloycat/agents/{agent_id}/runs');
   assert.deepEqual(document.manifest.prompt_context.include_sections, [
+    'Role',
     'Operating Rules',
     'Evidence Rules',
     'Forbidden Actions'
   ]);
   assert.match(
+    extractMarkdownSection(document.body, 'Role'),
+    /audit-only agent/
+  );
+  assert.match(
     extractMarkdownSection(document.body, 'Operating Rules'),
-    /Follow the phase-gated workflow/
+    /Execute only the current phase/
   );
 });
 
@@ -167,6 +172,7 @@ test('loads catalog index and Interaction Auditor markdown manifest metadata', (
   assert.equal(agent.artifacts.install_root, '.alloycat/agents/{agent_id}');
   assert.equal(agent.artifacts.run_root, '.alloycat/agents/{agent_id}/runs');
   assert.equal(agent.artifacts.state_file, 'state.json');
+  assert.match(agent.documentBody, /## Role/);
   assert.match(agent.documentBody, /## Operating Rules/);
 });
 
@@ -648,14 +654,18 @@ test('renders current phase prompt with phase metadata and artifact contracts', 
     assert.match(prompt, /00-project-root\.json/);
     assert.match(prompt, /Format: json/);
     assert.match(prompt, /## Agent Context/);
+    assert.match(prompt, /### Role/);
+    assert.match(prompt, /You are Alloy Interaction Auditor, an audit-only agent/);
     assert.match(prompt, /### Operating Rules/);
-    assert.match(prompt, /Follow the phase-gated workflow/);
+    assert.match(prompt, /Execute only the current phase/);
     assert.match(prompt, /### Evidence Rules/);
     assert.match(prompt, /Findings must cite concrete evidence/);
     assert.match(prompt, /### Forbidden Actions/);
     assert.match(prompt, /Do not fix product code during audit mode/);
+    assert.equal(prompt.indexOf('### Role') < prompt.indexOf('### Operating Rules'), true);
+    assert.doesNotMatch(prompt, /Do not skip discovery/);
     assert.match(prompt, /between phases\.\n\n### Evidence Rules/);
-    assert.match(prompt, /report assembly\.\n\n### Forbidden Actions/);
+    assert.match(prompt, /missing evidence\.\n\n### Forbidden Actions/);
     assert.match(prompt, /## Phase Instructions\n\n### Resolve Project Root/);
     assert.deepEqual(
       prompt.split(/\r?\n/).filter((line) => /^# /.test(line)),
