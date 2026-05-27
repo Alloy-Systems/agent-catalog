@@ -311,7 +311,8 @@ test('packed alloycat package infers registry npx command prefix from lockfile',
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^  npx alloycat@0\.1\.0 init$/m);
+    assert.match(result.stdout, /^  npx alloycat init$/m);
+    assert.doesNotMatch(result.stdout, /npx alloycat@/);
     assert.doesNotMatch(result.stdout, /--run-root/);
     assert.doesNotMatch(result.stdout, /--run <run-dir>/);
     assert.doesNotMatch(result.stdout, /npx --yes/);

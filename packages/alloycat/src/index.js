@@ -49,6 +49,13 @@ function normalizeNpxPackageSpec(spec, npxRoot) {
   return new URL(spec, pathToFileURL(`${npxRoot}${sep}`)).href;
 }
 
+function normalizeRegistryNpxPackageSpec(spec, packageName) {
+  if (spec === packageName || spec.startsWith(`${packageName}@`)) {
+    return packageName;
+  }
+  return spec;
+}
+
 function inferNpxPackageSpec(startPath) {
   try {
     const npxRoot = findNpxRoot(startPath);
@@ -70,10 +77,10 @@ function inferNpxPackageSpec(startPath) {
     }
 
     if (lockedPackage?.version) {
-      return `${manifest.name}@${lockedPackage.version}`;
+      return manifest.name;
     }
 
-    return dependencySpec ? `${manifest.name}@${dependencySpec}` : manifest.name;
+    return dependencySpec ? normalizeRegistryNpxPackageSpec(`${manifest.name}@${dependencySpec}`, manifest.name) : manifest.name;
   } catch {
     return null;
   }
@@ -86,7 +93,10 @@ function resolveDefaultCommandPrefix() {
   }
 
   const envPackage = process.env.npm_config_package?.trim();
-  const npxPackage = envPackage || inferNpxPackageSpec(entrypointPath);
+  const packageName = readJson(resolve(dirname(entrypointPath), '..', 'package.json')).name;
+  const npxPackage = envPackage
+    ? normalizeRegistryNpxPackageSpec(envPackage, packageName)
+    : inferNpxPackageSpec(entrypointPath);
   if (process.env.npm_lifecycle_event === 'npx' && npxPackage) {
     return `npx ${npxPackage}`;
   }
