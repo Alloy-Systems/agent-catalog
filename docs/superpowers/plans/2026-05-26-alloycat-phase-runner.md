@@ -42,15 +42,15 @@ const repoRoot = resolve(import.meta.dirname, '..');
 test('loads catalog and Interaction Audit agent metadata', () => {
   const catalog = loadCatalog(repoRoot);
   assert.equal(catalog.agents.length, 1);
-  assert.equal(catalog.agents[0].id, 'interaction-audit');
+  assert.equal(catalog.agents[0].id, 'interaction-auditor');
 
-  const agent = loadAgent(repoRoot, 'interaction-audit');
-  assert.equal(agent.name, 'Alloy Interaction Audit Agent');
+  const agent = loadAgent(repoRoot, 'interaction-auditor');
+  assert.equal(agent.name, 'Alloy Interaction Auditor');
   assert.equal(agent.runtime_model, 'workflow');
 });
 
 test('loads ordered workflow phases', () => {
-  const workflow = loadWorkflow(repoRoot, 'interaction-audit');
+  const workflow = loadWorkflow(repoRoot, 'interaction-auditor');
   assert.equal(workflow.phases[0].id, 'resolve-project-root');
   assert.equal(workflow.phases.at(-1).id, 'report-assembly');
 });
@@ -90,13 +90,13 @@ test('creates run state for the first phase', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-run-'));
   try {
     const run = createRun(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: repoRoot,
       runRoot: tempRoot,
       runId: 'test-run'
     });
 
-    assert.equal(run.state.agent_id, 'interaction-audit');
+    assert.equal(run.state.agent_id, 'interaction-auditor');
     assert.equal(run.state.current_phase, 'resolve-project-root');
     assert.equal(loadRunState(run.runDir).current_phase, 'resolve-project-root');
   } finally {
@@ -108,14 +108,14 @@ test('renders next phase prompt with exact artifact paths', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-prompt-'));
   try {
     const run = createRun(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: repoRoot,
       runRoot: tempRoot,
       runId: 'prompt-run'
     });
 
     const prompt = renderNextPrompt(repoRoot, run.runDir);
-    assert.match(prompt, /You are executing Alloy Interaction Audit Agent/);
+    assert.match(prompt, /You are executing Alloy Interaction Auditor/);
     assert.match(prompt, /Phase: resolve-project-root/);
     assert.match(prompt, /Output artifacts/);
     assert.match(prompt, /00-project-root\.json/);
@@ -184,19 +184,19 @@ function runCli(args) {
 test('list prints registered agents', () => {
   const result = runCli(['list']);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /interaction-audit/);
+  assert.match(result.stdout, /interaction-auditor/);
 });
 
 test('info prints one agent manifest', () => {
-  const result = runCli(['info', 'interaction-audit']);
+  const result = runCli(['info', 'interaction-auditor']);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /Alloy Interaction Audit Agent/);
+  assert.match(result.stdout, /Alloy Interaction Auditor/);
 });
 
 test('init, status, and next operate on a durable run folder', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-'));
   try {
-    const init = runCli(['init', 'interaction-audit', '--project', repoRoot, '--run-root', tempRoot, '--run-id', 'cli-run']);
+    const init = runCli(['init', 'interaction-auditor', '--project', repoRoot, '--run-root', tempRoot, '--run-id', 'cli-run']);
     assert.equal(init.status, 0, init.stderr);
     assert.match(init.stdout, /cli-run/);
 

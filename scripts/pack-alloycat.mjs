@@ -88,10 +88,11 @@ npx alloycat i
 npx alloycat init
 npx alloycat next
 npx alloycat remind
+npx alloycat uninstall interaction-auditor
 npx alloycat uninstall
 \`\`\`
 
-The installer writes project-local agent state under \`.alloycat/\` and updates \`.gitignore\` for that directory. Run \`npx alloycat uninstall\` from the target project to remove an installed agent.
+The installer writes project-local agent state under \`.alloycat/\` and updates \`.gitignore\` for that directory. Run \`npx alloycat uninstall <agent-id>\` from the target project to remove one agent, or \`npx alloycat uninstall\` to remove all alloycat project state.
 `;
 
   writeFileSync(join(stageRoot, 'README.md'), readme);

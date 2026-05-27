@@ -35,9 +35,9 @@ test('required empty agent directories have tracked placeholders', () => {
     'examples'
   ]) {
     assert.equal(
-      existsSync(resolve(repoRoot, 'agents', 'interaction-audit', directory, '.gitkeep')),
+      existsSync(resolve(repoRoot, 'agents', 'interaction-auditor', directory, '.gitkeep')),
       true,
-      `Missing tracked placeholder for agents/interaction-audit/${directory}`
+      `Missing tracked placeholder for agents/interaction-auditor/${directory}`
     );
   }
 });

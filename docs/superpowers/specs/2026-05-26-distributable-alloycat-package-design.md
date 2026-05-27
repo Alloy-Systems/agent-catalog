@@ -56,7 +56,7 @@ Expected behavior:
 Direct command form still works:
 
 ```text
-npx @alloy/alloycat install interaction-audit
+npx @alloy/alloycat install interaction-auditor
 ```
 
 Local smoke before publishing should use a package tarball:
@@ -85,7 +85,7 @@ package/
   catalog/
     catalog.yaml
     agents/
-      interaction-audit/
+      interaction-auditor/
         agent.yaml
         workflow.yaml
         README.md
@@ -109,7 +109,7 @@ packages/
       *.js
     package.json
 agents/
-  interaction-audit/
+  interaction-auditor/
 catalog.yaml
 ```
 
@@ -120,7 +120,7 @@ The staged package copies:
 - `packages/alloycat/src/`;
 - `packages/agent-runtime/src/` into `runtime/`;
 - `catalog.yaml` into `catalog/catalog.yaml`;
-- `agents/interaction-audit/` into `catalog/agents/interaction-audit/`;
+- `agents/interaction-auditor/` into `catalog/agents/interaction-auditor/`;
 - a package manifest with `bin.alloycat`.
 
 The generated staging directory must be ignored by git.
@@ -227,9 +227,9 @@ The script should print the created tarball path.
 Add package-level tests that verify the real packed artifact:
 
 - `npm run pack:alloycat` creates a tarball.
-- The tarball contains `package.json`, `src/index.js`, `runtime/index.js`, `catalog/catalog.yaml`, and the interaction-audit prompts.
-- `npx <tarball> list` prints `interaction-audit`.
-- `npx <tarball> install interaction-audit` from a temporary target project writes `.alloycat/agents/interaction-audit.json`, `.agent-runs/interaction-audit/`, and `.gitignore`.
+- The tarball contains `package.json`, `src/index.js`, `runtime/index.js`, `catalog/catalog.yaml`, and the interaction-auditor prompts.
+- `npx <tarball> list` prints `interaction-auditor`.
+- `npx <tarball> install interaction-auditor` from a temporary target project writes `.alloycat/agents/interaction-auditor.json`, `.agent-runs/interaction-auditor/`, and `.gitignore`.
 - The installed config records `catalog_root` inside the unpacked package runtime context, not the source checkout path.
 
 The tests should avoid registry publishing.

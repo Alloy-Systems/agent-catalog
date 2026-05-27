@@ -76,8 +76,8 @@ test('packed alloycat package contains standalone catalog and runtime files', ()
   assert.match(listing.stdout, /package\/src\/index\.js/);
   assert.match(listing.stdout, /package\/runtime\/index\.js/);
   assert.match(listing.stdout, /package\/catalog\/catalog\.yaml/);
-  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-audit\/workflow\.yaml/);
-  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-audit\/prompts\/00-resolve-project-root\.md/);
+  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/workflow\.yaml/);
+  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/prompts\/00-resolve-project-root\.md/);
 });
 
 test('packed alloycat package can list agents through npx', () => {
@@ -85,24 +85,24 @@ test('packed alloycat package can list agents through npx', () => {
   const result = run('npx', ['--yes', tarball, 'list']);
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /interaction-audit/);
+  assert.match(result.stdout, /interaction-auditor/);
 });
 
 test('packed alloycat package installs into a target project through npx', () => {
   const tarball = packAlloycat();
   const targetRoot = mkdtempSync(join(tmpdir(), 'alloycat-packed-target-'));
   try {
-    const result = run('npx', ['--yes', tarball, 'install', 'interaction-audit'], {
+    const result = run('npx', ['--yes', tarball, 'install', 'interaction-auditor'], {
       cwd: targetRoot
     });
     assert.equal(result.status, 0, result.stderr);
 
-    const configPath = join(targetRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const configPath = join(targetRoot, '.alloycat', 'agents', 'interaction-auditor.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
-    assert.equal(config.agent_id, 'interaction-audit');
+    assert.equal(config.agent_id, 'interaction-auditor');
     assert.equal(config.mode, 'linked');
-    assert.equal(existsSync(join(targetRoot, '.agent-runs', 'interaction-audit')), true);
+    assert.equal(existsSync(join(targetRoot, '.agent-runs', 'interaction-auditor')), true);
     assert.match(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
     assert.equal(basename(config.catalog_root), 'catalog');
     assert.notEqual(config.catalog_root, repoRoot);
@@ -283,7 +283,7 @@ Run:
 node --test tests/alloycat-package.test.mjs
 ```
 
-Expected: PASS. The tests should create a package tarball, inspect its contents, run `npx <tarball> list`, and run `npx <tarball> install interaction-audit` from a temporary target project.
+Expected: PASS. The tests should create a package tarball, inspect its contents, run `npx <tarball> list`, and run `npx <tarball> install interaction-auditor` from a temporary target project.
 
 - [ ] **Step 5: Run full existing verification**
 
@@ -333,16 +333,16 @@ Run with the real Alloy Sync project path substituted for `<alloy-sync-project>`
 
 ```powershell
 cd <alloy-sync-project>
-npx --yes C:\Users\pritex\Desktop\projects\alloy-agent-catalog\packages\alloycat\alloy-alloycat-0.1.0.tgz install interaction-audit
+npx --yes C:\Users\pritex\Desktop\projects\alloy-agent-catalog\packages\alloycat\alloy-alloycat-0.1.0.tgz install interaction-auditor
 ```
 
 Expected:
 
 - command exits 0;
-- output includes `Installed agent: interaction-audit`;
+- output includes `Installed agent: interaction-auditor`;
 - output includes the Alloy Sync project root;
-- `.alloycat/agents/interaction-audit.json` exists in the Alloy Sync project;
-- `.agent-runs/interaction-audit/` exists in the Alloy Sync project;
+- `.alloycat/agents/interaction-auditor.json` exists in the Alloy Sync project;
+- `.agent-runs/interaction-auditor/` exists in the Alloy Sync project;
 - `.gitignore` contains `.agent-runs/`.
 
 - [ ] **Step 3: Inspect target project changes**

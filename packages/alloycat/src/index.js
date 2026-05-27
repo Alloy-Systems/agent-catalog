@@ -13,7 +13,8 @@ import {
   loadRunState,
   renderNextPrompt,
   resolveProjectRoot,
-  uninstallAgent
+  uninstallAgent,
+  uninstallProject
 } from '../../agent-runtime/src/index.js';
 
 const entrypointPath = fileURLToPath(import.meta.url);
@@ -155,6 +156,13 @@ function printUninstallResult(result) {
   console.log(`Gitignore: ${result.gitignoreStatus} .alloycat/`);
 }
 
+function printProjectUninstallResult(result) {
+  console.log('Uninstalled all alloycat project state');
+  console.log(`Project root: ${result.projectRoot}`);
+  console.log(`Removed: ${result.installRoot}`);
+  console.log(`Gitignore: ${result.gitignoreStatus} .alloycat/`);
+}
+
 function printAgentChoices(catalog, action = 'install') {
   console.log(`Select an agent to ${action}:`);
   console.log('');
@@ -260,36 +268,6 @@ function resolveActiveRunDir(options, explicitAgentId, action) {
   return activeRuns[0].runDir;
 }
 
-function printInstalledAgentChoices(installedAgents) {
-  console.log('Select an installed agent to uninstall:');
-  console.log('');
-  installedAgents.forEach((agent, index) => {
-    console.log(`${index + 1}. ${agent.id}`);
-  });
-  console.log('');
-}
-
-async function selectInstalledAgentId(projectRoot) {
-  const installedAgents = listInstalledAgents(projectRoot);
-  if (installedAgents.length === 0) {
-    throw new Error(`No installed agents found in project: ${projectRoot}`);
-  }
-
-  printInstalledAgentChoices(installedAgents);
-
-  const rawSelection = (await readSelection()).trim();
-  if (!rawSelection) {
-    throw new Error('Agent id is required when running non-interactively. Run: alloycat uninstall <agent-id>');
-  }
-
-  const selection = Number(rawSelection);
-  if (!Number.isInteger(selection) || selection < 1 || selection > installedAgents.length) {
-    throw new Error(`Invalid installed agent selection: ${rawSelection}`);
-  }
-
-  return installedAgents[selection - 1].id;
-}
-
 async function commandInstall(agentId, options) {
   const selectedAgentId = agentId ?? await selectAgentId();
   const result = installAgent(repoRoot, {
@@ -302,9 +280,16 @@ async function commandInstall(agentId, options) {
 
 async function commandUninstall(agentId, options) {
   const projectRoot = resolveCommandProjectRoot(options);
-  const selectedAgentId = agentId ?? await selectInstalledAgentId(projectRoot);
+  if (!agentId) {
+    const result = uninstallProject({
+      project: projectRoot
+    });
+    printProjectUninstallResult(result);
+    return;
+  }
+
   const result = uninstallAgent(repoRoot, {
-    agentId: selectedAgentId,
+    agentId,
     project: projectRoot
   });
   printUninstallResult(result);

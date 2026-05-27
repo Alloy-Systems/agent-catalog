@@ -87,21 +87,6 @@ function removeGitignoreEntry(projectRoot) {
   return 'removed';
 }
 
-function cleanupEmptyInstallRoot(projectRoot) {
-  const alloycatRoot = join(projectRoot, '.alloycat');
-  const agentsRoot = join(alloycatRoot, 'agents');
-
-  if (existsSync(agentsRoot) && readdirSync(agentsRoot).length === 0) {
-    rmSync(agentsRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  }
-
-  if (existsSync(alloycatRoot) && readdirSync(alloycatRoot).length === 0) {
-    rmSync(alloycatRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  }
-
-  return existsSync(alloycatRoot) ? 'kept' : 'removed';
-}
-
 export function resolveProjectRoot(startPath = process.cwd()) {
   const resolvedStart = resolve(startPath);
   const start = statSync(resolvedStart).isDirectory() ? resolvedStart : dirname(resolvedStart);
@@ -188,17 +173,27 @@ export function uninstallAgent(_repoRoot, options) {
 
   rmSync(installedAgent.installDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 
-  const remainingAgents = listInstalledAgents(projectRoot);
-  const installRootStatus = cleanupEmptyInstallRoot(projectRoot);
-  const gitignoreStatus = remainingAgents.length === 0 && installRootStatus === 'removed'
-    ? removeGitignoreEntry(projectRoot)
-    : 'kept';
-
   return {
     agentId: installedAgent.id,
     projectRoot,
     installDir: installedAgent.installDir,
-    gitignoreStatus,
+    gitignoreStatus: 'kept',
+    installRootStatus: 'kept'
+  };
+}
+
+export function uninstallProject(options = {}) {
+  const projectRoot = options.project ? resolve(options.project) : resolveProjectRoot();
+  requireDirectory(projectRoot, 'Project root');
+
+  const alloycatRoot = join(projectRoot, '.alloycat');
+  const installRootStatus = existsSync(alloycatRoot) ? 'removed' : 'absent';
+  rmSync(alloycatRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+
+  return {
+    projectRoot,
+    installRoot: alloycatRoot,
+    gitignoreStatus: removeGitignoreEntry(projectRoot),
     installRootStatus
   };
 }

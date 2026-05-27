@@ -172,27 +172,27 @@ test('linked install writes project config, run root, readme, and gitignore entr
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-install-runtime-'));
   try {
     const result = installAgent(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot
     });
 
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor.json');
     const readmePath = join(tempRoot, '.alloycat', 'README.md');
-    const runRoot = join(tempRoot, '.agent-runs', 'interaction-audit');
+    const runRoot = join(tempRoot, '.agent-runs', 'interaction-auditor');
     const gitignorePath = join(tempRoot, '.gitignore');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
-    assert.equal(result.agent.id, 'interaction-audit');
+    assert.equal(result.agent.id, 'interaction-auditor');
     assert.equal(result.projectRoot, tempRoot);
     assert.equal(result.configPath, configPath);
     assert.equal(result.runRoot, runRoot);
     assert.equal(result.gitignoreStatus, 'added');
     assert.equal(result.mode, 'linked');
     assert.equal(config.schema_version, 1);
-    assert.equal(config.agent_id, 'interaction-audit');
+    assert.equal(config.agent_id, 'interaction-auditor');
     assert.equal(config.mode, 'linked');
     assert.equal(config.catalog_root, repoRoot);
-    assert.equal(config.agent_path, join(repoRoot, 'agents', 'interaction-audit'));
+    assert.equal(config.agent_path, join(repoRoot, 'agents', 'interaction-auditor'));
     assert.equal(config.run_root, runRoot);
     assert.match(config.installed_at, /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(existsSync(readmePath), true);
@@ -209,11 +209,11 @@ test('linked install does not duplicate an existing agent runs gitignore entry',
     writeFileSync(join(tempRoot, '.gitignore'), 'node_modules/\n.agent-runs/\ndist/\n');
 
     const first = installAgent(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot
     });
     const second = installAgent(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot
     });
     const gitignore = readFileSync(join(tempRoot, '.gitignore'), 'utf8');
@@ -408,17 +408,17 @@ Add this test to `tests/alloycat-cli.test.mjs`:
 test('install with an agent id writes linked install config without prompting', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-direct-'));
   try {
-    const result = runCli(['install', 'interaction-audit', '--project', tempRoot]);
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const result = runCli(['install', 'interaction-auditor', '--project', tempRoot]);
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Installed agent: interaction-audit/);
+    assert.match(result.stdout, /Installed agent: interaction-auditor/);
     assert.match(result.stdout, /Gitignore: added \.agent-runs\//);
-    assert.match(result.stdout, /alloycat init interaction-audit/);
-    assert.equal(config.agent_id, 'interaction-audit');
+    assert.match(result.stdout, /alloycat init interaction-auditor/);
+    assert.equal(config.agent_id, 'interaction-auditor');
     assert.equal(config.mode, 'linked');
-    assert.equal(existsSync(join(tempRoot, '.agent-runs', 'interaction-audit')), true);
+    assert.equal(existsSync(join(tempRoot, '.agent-runs', 'interaction-auditor')), true);
     assert.match(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -520,14 +520,14 @@ test('install without an agent id accepts a numbered selection from stdin', () =
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-select-'));
   try {
     const result = runCli(['install', '--project', tempRoot], { input: '1\n' });
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit.json');
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Select an agent to install:/);
-    assert.match(result.stdout, /1\. interaction-audit/);
-    assert.match(result.stdout, /Installed agent: interaction-audit/);
-    assert.equal(config.agent_id, 'interaction-audit');
+    assert.match(result.stdout, /1\. interaction-auditor/);
+    assert.match(result.stdout, /Installed agent: interaction-auditor/);
+    assert.equal(config.agent_id, 'interaction-auditor');
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }

@@ -4,7 +4,7 @@
 
 Create a separate repository for reusable agents. The repository is a governed catalog, not a loose prompt collection. Each agent package must define its purpose, internal workflow, artifacts, prompts, schemas, host adapters, tests, fixtures, and release status.
 
-The initial agent in the catalog is the Interaction Audit Agent. Future agents may cover release readiness, architecture review, migration planning, design conformance, e2e coverage review, and other recurring engineering tasks.
+The initial agent in the catalog is the Interaction Auditor. Future agents may cover release readiness, architecture review, migration planning, design conformance, e2e coverage review, and other recurring engineering tasks.
 
 In this design, "agent" is the user-facing unit. "Workflow" is the internal implementation model for agents that need phase gates, durable artifacts, and deterministic branching.
 
@@ -35,7 +35,7 @@ Recommended package names:
 @alloy/agent-runtime
 ```
 
-`Alloy` is the shared brand prefix for user-facing naming. Individual agents use descriptive names under that brand, such as `alloy-interaction-audit` or `alloy-release-readiness`.
+`Alloy` is the shared brand prefix for user-facing naming. Individual agents use descriptive names under that brand, such as `alloy-interaction-auditor` or `alloy-release-readiness`.
 
 ## Goals
 
@@ -84,7 +84,7 @@ alloy-agent-catalog/
       tests/
 
   agents/
-    interaction-audit/
+    interaction-auditor/
       agent.yaml
       README.md
       workflow.yaml
@@ -136,8 +136,8 @@ catalog:
   schema_version: 1
 
 workflows:
-  - id: interaction-audit
-    path: agents/interaction-audit
+  - id: interaction-auditor
+    path: agents/interaction-auditor
     status: experimental
     version: 0.1.0
     description: Agent that audits visible UI behavior, source-of-truth conformance, and e2e coverage.
@@ -162,8 +162,8 @@ Every agent package has `agent.yaml`.
 Example:
 
 ```yaml
-id: interaction-audit
-name: Alloy Interaction Audit Agent
+id: interaction-auditor
+name: Alloy Interaction Auditor
 type: phase-gated-agent
 runtime_model: workflow
 status: experimental
@@ -171,11 +171,11 @@ version: 0.1.0
 description: Agent that audits visible UI behavior, source-of-truth conformance, and e2e coverage.
 
 entrypoint:
-  command: alloycat run interaction-audit
+  command: alloycat run interaction-auditor
   orchestrator: scripts/auditctl.mjs
 
 artifacts:
-  run_root: .agent-runs/interaction-audit
+  run_root: .agent-runs/interaction-auditor
   state_file: state.json
 
 supports:
@@ -325,9 +325,9 @@ The catalog should ship a recommended ignore snippet:
 
 Run artifacts are durable operational output, not catalog source files.
 
-## First Agent: Alloy Interaction Audit Agent
+## First Agent: Alloy Interaction Auditor
 
-The first catalog agent is `interaction-audit`.
+The first catalog agent is `interaction-auditor`.
 
 It includes:
 
@@ -341,7 +341,7 @@ It includes:
 - final report assembly;
 - optional fix planning.
 
-The Interaction Audit Agent is the reference implementation for catalog rules. New agents should copy its structure before simplifying it.
+The Interaction Auditor is the reference implementation for catalog rules. New agents should copy its structure before simplifying it.
 
 ## Adding A New Agent
 
@@ -429,7 +429,7 @@ The first repository milestone should include:
 - `catalog.yaml`;
 - `packages/alloycat`;
 - `packages/agent-runtime`;
-- `agents/interaction-audit`;
+- `agents/interaction-auditor`;
 - manifest validation;
 - run folder creation;
 - phase prompt rendering;

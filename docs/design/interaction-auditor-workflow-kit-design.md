@@ -29,7 +29,7 @@ The workflow turns an interaction audit into a sequence of narrow phases. Each p
 The portable kit is a standalone folder that can be copied into a project, installed as a shared local tool, or referenced from a central tools repository.
 
 ```text
-interaction-audit/
+interaction-auditor/
   README.md
   workflow.yaml
 
@@ -39,7 +39,7 @@ interaction-audit/
     02-source-of-truth.md
     03-scope-confirmation.md
     04-branch-planning.md
-    05A-interaction-audit.md
+    05A-interaction-auditor.md
     05B-visual-conformance-audit.md
     05C-e2e-coverage-audit.md
     06-report-assembly.md
@@ -69,7 +69,7 @@ interaction-audit/
       agents/
         discovery.toml
         source-of-truth.toml
-        interaction-audit.toml
+        interaction-auditor.toml
         visual-audit.toml
         e2e-coverage.toml
         report-assembly.toml
@@ -79,7 +79,7 @@ interaction-audit/
       agents/
         discovery.md
         source-of-truth.md
-        interaction-audit.md
+        interaction-auditor.md
         visual-audit.md
         e2e-coverage.md
         report-assembly.md
@@ -92,7 +92,7 @@ Host adapters may rename files to match their host's expected skill and subagent
 Each audit run writes all durable state into a run folder.
 
 ```text
-.agent-runs/interaction-audit/<run-id>/
+.agent-runs/interaction-auditor/<run-id>/
   state.json
   00-project-root.json
   01-project-discovery.md

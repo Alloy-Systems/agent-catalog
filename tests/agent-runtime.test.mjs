@@ -12,6 +12,7 @@ import {
   completeRun,
   resolveProjectRoot,
   installAgent,
+  uninstallProject,
   uninstallAgent,
   renderNextPrompt,
   saveRunState
@@ -22,21 +23,21 @@ const repoRoot = resolve(import.meta.dirname, '..');
 test('loads catalog and Interaction Audit agent metadata', () => {
   const catalog = loadCatalog(repoRoot);
   assert.equal(catalog.agents.length, 1);
-  assert.equal(catalog.agents[0].id, 'interaction-audit');
+  assert.equal(catalog.agents[0].id, 'interaction-auditor');
 
-  const agent = loadAgent(repoRoot, 'interaction-audit');
-  assert.equal(agent.name, 'Alloy Interaction Audit Agent');
+  const agent = loadAgent(repoRoot, 'interaction-auditor');
+  assert.equal(agent.name, 'Alloy Interaction Auditor');
   assert.equal(agent.runtime_model, 'workflow');
 });
 
 test('loads ordered workflow phases', () => {
-  const workflow = loadWorkflow(repoRoot, 'interaction-audit');
+  const workflow = loadWorkflow(repoRoot, 'interaction-auditor');
   assert.equal(workflow.phases[0].id, 'resolve-project-root');
   assert.equal(workflow.phases.at(-1).id, 'report-assembly');
 });
 
 test('loads human-readable phase metadata and output artifact contracts', () => {
-  const workflow = loadWorkflow(repoRoot, 'interaction-audit');
+  const workflow = loadWorkflow(repoRoot, 'interaction-auditor');
   const phase = workflow.phases.find((candidate) => candidate.id === 'project-discovery');
 
   assert.equal(phase.title, 'Project Discovery');
@@ -81,27 +82,27 @@ test('linked install writes project config, run root, readme, and gitignore entr
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-install-runtime-'));
   try {
     const result = installAgent(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot
     });
 
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'index.json');
     const readmePath = join(tempRoot, '.alloycat', 'README.md');
-    const runRoot = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs');
+    const runRoot = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs');
     const gitignorePath = join(tempRoot, '.gitignore');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
-    assert.equal(result.agent.id, 'interaction-audit');
+    assert.equal(result.agent.id, 'interaction-auditor');
     assert.equal(result.projectRoot, tempRoot);
     assert.equal(result.configPath, configPath);
     assert.equal(result.runRoot, runRoot);
     assert.equal(result.gitignoreStatus, 'added');
     assert.equal(result.mode, 'linked');
     assert.equal(config.schema_version, 1);
-    assert.equal(config.agent_id, 'interaction-audit');
+    assert.equal(config.agent_id, 'interaction-auditor');
     assert.equal(config.mode, 'linked');
     assert.equal(config.catalog_root, repoRoot);
-    assert.equal(config.agent_path, join(repoRoot, 'agents', 'interaction-audit'));
+    assert.equal(config.agent_path, join(repoRoot, 'agents', 'interaction-auditor'));
     assert.equal(config.run_root, runRoot);
     assert.match(config.installed_at, /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(existsSync(readmePath), false);
@@ -120,11 +121,11 @@ test('linked install does not duplicate an existing alloycat gitignore entry', (
     writeFileSync(join(tempRoot, '.gitignore'), 'node_modules/\n/.alloycat/\ndist/\n');
 
     const first = installAgent(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot
     });
     const second = installAgent(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot
     });
     const gitignore = readFileSync(join(tempRoot, '.gitignore'), 'utf8');
@@ -144,7 +145,7 @@ test('linked install does not write an alloycat readme', () => {
     const readmePath = join(tempRoot, '.alloycat', 'README.md');
 
     installAgent(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot
     });
 
@@ -158,11 +159,11 @@ test('linked install repeated from an empty project keeps one alloycat gitignore
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-install-repeat-'));
   try {
     installAgent(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot
     });
     const second = installAgent(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot
     });
     const gitignore = readFileSync(join(tempRoot, '.gitignore'), 'utf8');
@@ -175,24 +176,50 @@ test('linked install repeated from an empty project keeps one alloycat gitignore
   }
 });
 
-test('uninstall removes an installed agent and cleans project ignore state', () => {
+test('uninstall with an agent id removes only that agent state', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-uninstall-runtime-'));
   try {
     installAgent(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot
     });
-    const runRoot = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs');
+    const runRoot = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs');
     writeFileSync(join(runRoot, 'old-run.txt'), 'run artifact\n');
 
     const result = uninstallAgent(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot
     });
 
-    assert.equal(result.agentId, 'interaction-audit');
+    assert.equal(result.agentId, 'interaction-auditor');
+    assert.equal(result.projectRoot, tempRoot);
+    assert.equal(result.gitignoreStatus, 'kept');
+    assert.equal(result.installRootStatus, 'kept');
+    assert.equal(existsSync(join(tempRoot, '.alloycat')), true);
+    assert.equal(existsSync(join(tempRoot, '.alloycat', 'agents', 'interaction-auditor')), false);
+    assert.match(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('project uninstall removes all alloycat state and cleans project ignore state', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-uninstall-project-runtime-'));
+  try {
+    installAgent(repoRoot, {
+      agentId: 'interaction-auditor',
+      project: tempRoot
+    });
+    const runRoot = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs');
+    writeFileSync(join(runRoot, 'old-run.txt'), 'run artifact\n');
+
+    const result = uninstallProject({
+      project: tempRoot
+    });
+
     assert.equal(result.projectRoot, tempRoot);
     assert.equal(result.gitignoreStatus, 'removed');
+    assert.equal(result.installRootStatus, 'removed');
     assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
     assert.doesNotMatch(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
   } finally {
@@ -205,10 +232,10 @@ test('uninstall rejects agents that are not installed', () => {
   try {
     assert.throws(
       () => uninstallAgent(repoRoot, {
-        agentId: 'interaction-audit',
+        agentId: 'interaction-auditor',
         project: tempRoot
       }),
-      /Agent is not installed: interaction-audit/
+      /Agent is not installed: interaction-auditor/
     );
     assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
   } finally {
@@ -220,12 +247,12 @@ test('create run defaults run root to the target project agent runs folder', () 
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-run-default-root-'));
   try {
     const run = createRun(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: tempRoot,
       runId: 'default-root-run'
     });
 
-    assert.equal(run.runDir, join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs', 'default-root-run'));
+    assert.equal(run.runDir, join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs', 'default-root-run'));
     assert.equal(loadRunState(run.runDir).project_root, tempRoot);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -236,13 +263,13 @@ test('creates run state for the first phase', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-run-'));
   try {
     const run = createRun(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: repoRoot,
       runRoot: tempRoot,
       runId: 'test-run'
     });
 
-    assert.equal(run.state.agent_id, 'interaction-audit');
+    assert.equal(run.state.agent_id, 'interaction-auditor');
     assert.equal(run.state.current_phase, 'resolve-project-root');
     assert.equal(loadRunState(run.runDir).current_phase, 'resolve-project-root');
   } finally {
@@ -254,14 +281,14 @@ test('renders current phase prompt with phase metadata and artifact contracts', 
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-prompt-'));
   try {
     const run = createRun(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: repoRoot,
       runRoot: tempRoot,
       runId: 'prompt-run'
     });
 
     const prompt = renderNextPrompt(repoRoot, run.runDir);
-    assert.match(prompt, /You are executing Alloy Interaction Audit Agent/);
+    assert.match(prompt, /You are executing Alloy Interaction Auditor/);
     assert.match(prompt, /Phase: Resolve Project Root \(resolve-project-root\)/);
     assert.match(prompt, /Goal: Identify the target project root/);
     assert.match(prompt, /Output artifacts/);
@@ -278,7 +305,7 @@ test('complete requires current phase output artifacts before advancing', () => 
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-complete-missing-'));
   try {
     const run = createRun(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: repoRoot,
       runRoot: tempRoot,
       runId: 'missing-output-run'
@@ -297,7 +324,7 @@ test('complete validates json output artifacts before advancing', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-complete-invalid-json-'));
   try {
     const run = createRun(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: repoRoot,
       runRoot: tempRoot,
       runId: 'invalid-json-run'
@@ -317,7 +344,7 @@ test('complete advances to the next workflow phase after outputs exist', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-complete-next-'));
   try {
     const run = createRun(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: repoRoot,
       runRoot: tempRoot,
       runId: 'next-phase-run'
@@ -341,7 +368,7 @@ test('complete reports when the next phase is a user gate', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-complete-gate-'));
   try {
     const run = createRun(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: repoRoot,
       runRoot: tempRoot,
       runId: 'gate-run'
@@ -365,7 +392,7 @@ test('complete marks the run completed after the final phase', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-complete-final-'));
   try {
     const run = createRun(repoRoot, {
-      agentId: 'interaction-audit',
+      agentId: 'interaction-auditor',
       project: repoRoot,
       runRoot: tempRoot,
       runId: 'final-run'
@@ -378,7 +405,7 @@ test('complete marks the run completed after the final phase', () => {
       'source-of-truth',
       'scope-confirmation',
       'branch-planning',
-      'interaction-audit',
+      'interaction-auditor',
       'visual-conformance-audit',
       'e2e-coverage-audit'
     ];
@@ -398,7 +425,7 @@ test('complete marks the run completed after the final phase', () => {
       'source-of-truth',
       'scope-confirmation',
       'branch-planning',
-      'interaction-audit',
+      'interaction-auditor',
       'visual-conformance-audit',
       'e2e-coverage-audit',
       'report-assembly'

@@ -20,32 +20,32 @@ function runCli(args, options = {}) {
 test('list prints registered agents', () => {
   const result = runCli(['list']);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /interaction-audit/);
+  assert.match(result.stdout, /interaction-auditor/);
 });
 
 test('info prints one agent manifest', () => {
-  const result = runCli(['info', 'interaction-audit']);
+  const result = runCli(['info', 'interaction-auditor']);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /Alloy Interaction Audit Agent/);
+  assert.match(result.stdout, /Alloy Interaction Auditor/);
 });
 
 test('install with an agent id writes linked install config without prompting', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-direct-'));
   try {
-    const result = runCli(['install', 'interaction-audit', '--project', tempRoot]);
+    const result = runCli(['install', 'interaction-auditor', '--project', tempRoot]);
     assert.equal(result.status, 0, result.stderr);
 
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'index.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
-    assert.match(result.stdout, /Installed agent: interaction-audit/);
+    assert.match(result.stdout, /Installed agent: interaction-auditor/);
     assert.match(result.stdout, /Gitignore: added \.alloycat\//);
     assert.match(result.stdout, /^  alloycat init$/m);
     assert.doesNotMatch(result.stdout, /--run <run-dir>/);
     assert.doesNotMatch(result.stdout, /npx @alloy\/alloycat/);
-    assert.equal(config.agent_id, 'interaction-audit');
+    assert.equal(config.agent_id, 'interaction-auditor');
     assert.equal(config.mode, 'linked');
-    assert.equal(existsSync(join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs')), true);
+    assert.equal(existsSync(join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs')), true);
     assert.equal(existsSync(join(tempRoot, '.agent-runs')), false);
     assert.match(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
     assert.doesNotMatch(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
@@ -57,14 +57,14 @@ test('install with an agent id writes linked install config without prompting', 
 test('i alias installs an agent like install', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-alias-'));
   try {
-    const result = runCli(['i', 'interaction-audit', '--project', tempRoot]);
+    const result = runCli(['i', 'interaction-auditor', '--project', tempRoot]);
     assert.equal(result.status, 0, result.stderr);
 
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'index.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
-    assert.match(result.stdout, /Installed agent: interaction-audit/);
-    assert.equal(config.agent_id, 'interaction-audit');
+    assert.match(result.stdout, /Installed agent: interaction-auditor/);
+    assert.equal(config.agent_id, 'interaction-auditor');
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -75,7 +75,7 @@ test('install from project root prints a copy-safe init command', () => {
   try {
     mkdirSync(join(tempRoot, '.git'));
 
-    const result = runCli(['install', 'interaction-audit'], { cwd: tempRoot });
+    const result = runCli(['install', 'interaction-auditor'], { cwd: tempRoot });
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /^  alloycat init$/m);
@@ -92,7 +92,7 @@ test('install prints the short init command for PowerShell projects with quoted 
     const projectRoot = join(tempRoot, "John's App");
     mkdirSync(projectRoot, { recursive: true });
 
-    const result = runCli(['install', 'interaction-audit', '--project', projectRoot], {
+    const result = runCli(['install', 'interaction-auditor', '--project', projectRoot], {
       env: {
         MSYSTEM: '',
         SHELL: ''
@@ -113,7 +113,7 @@ test('install prints the short init command for Git Bash projects with quoted pa
     const projectRoot = join(tempRoot, "John's App");
     mkdirSync(projectRoot, { recursive: true });
 
-    const result = runCli(['install', 'interaction-audit', '--project', projectRoot], {
+    const result = runCli(['install', 'interaction-auditor', '--project', projectRoot], {
       env: {
         MSYSTEM: 'MINGW64',
         SHELL: '/usr/bin/bash'
@@ -131,14 +131,14 @@ test('install without an agent id accepts a numbered selection from stdin', () =
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-select-'));
   try {
     const result = runCli(['install', '--project', tempRoot], { input: '1\n' });
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'index.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Select an agent to install:/);
-    assert.match(result.stdout, /1\. interaction-audit/);
-    assert.match(result.stdout, /Installed agent: interaction-audit/);
-    assert.equal(config.agent_id, 'interaction-audit');
+    assert.match(result.stdout, /1\. interaction-auditor/);
+    assert.match(result.stdout, /Installed agent: interaction-auditor/);
+    assert.equal(config.agent_id, 'interaction-auditor');
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -164,15 +164,15 @@ test('install without project option resolves the project root from nested cwd',
     const nested = join(tempRoot, 'src', 'features');
     mkdirSync(nested, { recursive: true });
 
-    const result = runCli(['install', 'interaction-audit'], { cwd: nested });
+    const result = runCli(['install', 'interaction-auditor'], { cwd: nested });
     assert.equal(result.status, 0, result.stderr);
 
-    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
+    const configPath = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'index.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
     assert.equal(result.stdout.includes(`Project root: ${tempRoot}`), true);
-    assert.equal(config.agent_id, 'interaction-audit');
-    assert.equal(config.run_root, join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs'));
+    assert.equal(config.agent_id, 'interaction-auditor');
+    assert.equal(config.run_root, join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs'));
     assert.equal(existsSync(join(nested, '.alloycat')), false);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -195,7 +195,7 @@ test('install without an agent id rejects invalid numbered selection', () => {
 test('install rejects unsupported install modes before writing project config', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-install-mode-'));
   try {
-    const result = runCli(['install', 'interaction-audit', '--project', tempRoot, '--mode', 'vendored']);
+    const result = runCli(['install', 'interaction-auditor', '--project', tempRoot, '--mode', 'vendored']);
 
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /Unsupported install mode: vendored/);
@@ -205,16 +205,35 @@ test('install rejects unsupported install modes before writing project config', 
   }
 });
 
-test('uninstall with an agent id removes the project install', () => {
+test('uninstall with an agent id removes only that agent install', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-uninstall-direct-'));
   try {
-    const install = runCli(['install', 'interaction-audit', '--project', tempRoot]);
+    const install = runCli(['install', 'interaction-auditor', '--project', tempRoot]);
     assert.equal(install.status, 0, install.stderr);
 
-    const result = runCli(['uninstall', 'interaction-audit', '--project', tempRoot]);
+    const result = runCli(['uninstall', 'interaction-auditor', '--project', tempRoot]);
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Uninstalled agent: interaction-audit/);
+    assert.match(result.stdout, /Uninstalled agent: interaction-auditor/);
+    assert.match(result.stdout, /Gitignore: kept \.alloycat\//);
+    assert.equal(existsSync(join(tempRoot, '.alloycat')), true);
+    assert.equal(existsSync(join(tempRoot, '.alloycat', 'agents', 'interaction-auditor')), false);
+    assert.match(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('uninstall without an agent id removes all alloycat project state', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-uninstall-project-'));
+  try {
+    const install = runCli(['install', 'interaction-auditor', '--project', tempRoot]);
+    assert.equal(install.status, 0, install.stderr);
+
+    const result = runCli(['uninstall', '--project', tempRoot]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Uninstalled all alloycat project state/);
     assert.match(result.stdout, /Gitignore: removed \.alloycat\//);
     assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
     assert.doesNotMatch(readFileSync(join(tempRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
@@ -223,31 +242,15 @@ test('uninstall with an agent id removes the project install', () => {
   }
 });
 
-test('uninstall without an agent id accepts a numbered installed-agent selection from stdin', () => {
-  const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-uninstall-select-'));
-  try {
-    const install = runCli(['install', 'interaction-audit', '--project', tempRoot]);
-    assert.equal(install.status, 0, install.stderr);
-
-    const result = runCli(['uninstall', '--project', tempRoot], { input: '1\n' });
-
-    assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Select an installed agent to uninstall:/);
-    assert.match(result.stdout, /1\. interaction-audit/);
-    assert.match(result.stdout, /Uninstalled agent: interaction-audit/);
-    assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
-  } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
-  }
-});
-
-test('uninstall without installed agents exits nonzero', () => {
+test('uninstall without an agent id is idempotent when alloycat is absent', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-uninstall-empty-'));
   try {
-    const result = runCli(['uninstall', '--project', tempRoot], { input: '' });
+    const result = runCli(['uninstall', '--project', tempRoot]);
 
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /No installed agents found/);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Uninstalled all alloycat project state/);
+    assert.match(result.stdout, /Gitignore: absent \.alloycat\//);
+    assert.equal(existsSync(join(tempRoot, '.alloycat')), false);
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -257,7 +260,7 @@ test('init, status, remind, and next operate on the active installed run without
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-'));
   try {
     mkdirSync(join(tempRoot, '.git'));
-    const install = runCli(['install', 'interaction-audit'], { cwd: tempRoot });
+    const install = runCli(['install', 'interaction-auditor'], { cwd: tempRoot });
     assert.equal(install.status, 0, install.stderr);
 
     const init = runCli([
@@ -270,7 +273,7 @@ test('init, status, remind, and next operate on the active installed run without
     assert.match(init.stdout, /Phase: Resolve Project Root \(resolve-project-root\)/);
     assert.match(init.stdout, /then run:\n  alloycat next/);
 
-    const runDir = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs', 'cli-run');
+    const runDir = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs', 'cli-run');
     const status = runCli(['status'], { cwd: tempRoot });
     assert.equal(status.status, 0, status.stderr);
     assert.match(status.stdout, /resolve-project-root/);
@@ -292,7 +295,7 @@ test('init, status, remind, and next operate on the active installed run without
 test('init without run root writes under the target project and prints the first task', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-init-default-root-'));
   try {
-    const install = runCli(['install', 'interaction-audit'], { cwd: tempRoot });
+    const install = runCli(['install', 'interaction-auditor'], { cwd: tempRoot });
     assert.equal(install.status, 0, install.stderr);
 
     const init = runCli([
@@ -302,7 +305,7 @@ test('init without run root writes under the target project and prints the first
     ], { cwd: tempRoot });
 
     assert.equal(init.status, 0, init.stderr);
-    const runDir = join(tempRoot, '.alloycat', 'agents', 'interaction-audit', 'runs', 'cli-default-root-run');
+    const runDir = join(tempRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs', 'cli-default-root-run');
 
     assert.equal(existsSync(join(runDir, 'state.json')), true);
     assert.match(init.stdout, /Phase: Resolve Project Root \(resolve-project-root\)/);
@@ -315,7 +318,7 @@ test('init without run root writes under the target project and prints the first
 test('next advances a run and reports user confirmation gates', () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-complete-project-'));
   try {
-    const install = runCli(['install', 'interaction-audit'], { cwd: projectRoot });
+    const install = runCli(['install', 'interaction-auditor'], { cwd: projectRoot });
     assert.equal(install.status, 0, install.stderr);
 
     const init = runCli([
@@ -325,7 +328,7 @@ test('next advances a run and reports user confirmation gates', () => {
     ], { cwd: projectRoot });
     assert.equal(init.status, 0, init.stderr);
 
-    const runDir = join(projectRoot, '.alloycat', 'agents', 'interaction-audit', 'runs', 'cli-complete-run');
+    const runDir = join(projectRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs', 'cli-complete-run');
     writeFileSync(join(runDir, '00-project-root.json'), '{}\n');
     let next = runCli(['next'], { cwd: projectRoot });
     assert.equal(next.status, 0, next.stderr);
@@ -352,7 +355,7 @@ test('next advances a run and reports user confirmation gates', () => {
 test('next exits nonzero when current phase outputs are missing', () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'alloycat-cli-complete-missing-project-'));
   try {
-    const install = runCli(['install', 'interaction-audit'], { cwd: projectRoot });
+    const install = runCli(['install', 'interaction-auditor'], { cwd: projectRoot });
     assert.equal(install.status, 0, install.stderr);
 
     const init = runCli([

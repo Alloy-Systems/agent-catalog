@@ -68,16 +68,16 @@ The resolved path must exist and be a directory.
 
 ## Installed Files
 
-For `interaction-audit`, a linked install writes:
+For `interaction-auditor`, a linked install writes:
 
 ```text
 <project-root>/
   .alloycat/
     README.md
     agents/
-      interaction-audit.json
+      interaction-auditor.json
   .agent-runs/
-    interaction-audit/
+    interaction-auditor/
 ```
 
 The agent config JSON contains:
@@ -85,11 +85,11 @@ The agent config JSON contains:
 ```json
 {
   "schema_version": 1,
-  "agent_id": "interaction-audit",
+  "agent_id": "interaction-auditor",
   "mode": "linked",
   "catalog_root": "<absolute catalog checkout path>",
-  "agent_path": "<absolute path to agents/interaction-audit>",
-  "run_root": "<absolute project path>/.agent-runs/interaction-audit",
+  "agent_path": "<absolute path to agents/interaction-auditor>",
+  "run_root": "<absolute project path>/.agent-runs/interaction-auditor",
   "installed_at": "<ISO timestamp>"
 }
 ```
@@ -169,14 +169,14 @@ Runtime tests should cover:
 
 CLI tests should cover:
 
-- `install interaction-audit --project <temp>` installs without prompting;
+- `install interaction-auditor --project <temp>` installs without prompting;
 - selection-driven `install --project <temp>` accepts stdin input `1` and installs the listed agent;
 - non-interactive `install --project <temp>` without an agent id exits nonzero with the required-agent message.
 
 ## Success Criteria
 
 - A user can run `alloycat install` from inside a target project and choose an agent interactively.
-- A script can run `alloycat install interaction-audit --project <path>` without interaction.
+- A script can run `alloycat install interaction-auditor --project <path>` without interaction.
 - The target project receives durable install config and ignored run artifact storage.
 - Re-running the installer is safe.
 - Existing tests plus the new install tests pass.

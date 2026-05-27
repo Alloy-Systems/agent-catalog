@@ -6,13 +6,13 @@ This repository stores agent packages, not project-specific audit output. Each a
 
 ## Initial Agent
 
-- `agents/interaction-audit`: Alloy Interaction Audit Agent. It audits visible UI behavior, source-of-truth conformance, and e2e coverage through explicit phases and durable run artifacts.
+- `agents/interaction-auditor`: Alloy Interaction Auditor. It audits visible UI behavior, source-of-truth conformance, and e2e coverage through explicit phases and durable run artifacts.
 
 ## Repository Shape
 
 ```text
 agents/
-  interaction-audit/
+  interaction-auditor/
     agent.yaml
     workflow.yaml
     prompts/

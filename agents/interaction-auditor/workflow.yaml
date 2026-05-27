@@ -1,6 +1,6 @@
 workflow:
-  id: interaction-audit
-  name: Alloy Interaction Audit Agent
+  id: interaction-auditor
+  name: Alloy Interaction Auditor
   schema_version: 1
 
 phases:
@@ -66,10 +66,10 @@ phases:
         format: json
         description: Branch execution plan with audit branch flags and rationale.
 
-  - id: interaction-audit
+  - id: interaction-auditor
     title: Interaction Audit
     description: Audit visible UI behavior against the confirmed scope and UI inventory.
-    prompt: prompts/05A-interaction-audit.md
+    prompt: prompts/05A-interaction-auditor.md
     branch_key: run_interaction_audit
     inputs:
       - 04-confirmed-scope.md

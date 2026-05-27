@@ -88,8 +88,8 @@ test('packed alloycat package contains standalone catalog and runtime files', ()
   assert.match(listing.stdout, /package\/src\/index\.js/);
   assert.match(listing.stdout, /package\/runtime\/index\.js/);
   assert.match(listing.stdout, /package\/catalog\/catalog\.yaml/);
-  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-audit\/workflow\.yaml/);
-  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-audit\/prompts\/00-resolve-project-root\.md/);
+  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/workflow\.yaml/);
+  assert.match(listing.stdout, /package\/catalog\/agents\/interaction-auditor\/prompts\/00-resolve-project-root\.md/);
 });
 
 test('packed alloycat package includes CI repository metadata when provided', () => {
@@ -112,7 +112,7 @@ test('packed alloycat package can list agents through npx', () => {
   const result = run('npx', ['--yes', npxPackageSpec(tarball), 'list']);
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /interaction-audit/);
+  assert.match(result.stdout, /interaction-auditor/);
 });
 
 test('packed alloycat package can validate the packaged catalog through npx', () => {
@@ -127,22 +127,22 @@ test('packed alloycat package installs into a target project through npx', () =>
   const tarball = packAlloycat();
   const targetRoot = mkdtempSync(join(tmpdir(), 'alloycat-packed-target-'));
   try {
-    const result = run('npx', ['--yes', npxPackageSpec(tarball), 'install', 'interaction-audit'], {
+    const result = run('npx', ['--yes', npxPackageSpec(tarball), 'install', 'interaction-auditor'], {
       cwd: targetRoot
     });
     assert.equal(result.status, 0, result.stderr);
 
-    const configPath = join(targetRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
+    const configPath = join(targetRoot, '.alloycat', 'agents', 'interaction-auditor', 'index.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
-    assert.equal(config.agent_id, 'interaction-audit');
+    assert.equal(config.agent_id, 'interaction-auditor');
     assert.equal(config.mode, 'linked');
     const commandPrefix = `npx ${npxPackageSpec(tarball)}`;
     assert.equal(result.stdout.includes(`${commandPrefix} init`), true);
     assert.equal(result.stdout.includes('--run-root'), false);
     assert.equal(result.stdout.includes('--run <run-dir>'), false);
     assert.doesNotMatch(result.stdout, /npx --yes/);
-    assert.equal(existsSync(join(targetRoot, '.alloycat', 'agents', 'interaction-audit', 'runs')), true);
+    assert.equal(existsSync(join(targetRoot, '.alloycat', 'agents', 'interaction-auditor', 'runs')), true);
     assert.equal(existsSync(join(targetRoot, '.agent-runs')), false);
     assert.match(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
     assert.doesNotMatch(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.agent-runs\/$/m);
@@ -162,37 +162,63 @@ test('packed alloycat package installs with the i alias through npx', () => {
   const tarball = packAlloycat();
   const targetRoot = mkdtempSync(join(tmpdir(), 'alloycat-packed-alias-target-'));
   try {
-    const result = run('npx', ['--yes', npxPackageSpec(tarball), 'i', 'interaction-audit'], {
+    const result = run('npx', ['--yes', npxPackageSpec(tarball), 'i', 'interaction-auditor'], {
       cwd: targetRoot
     });
     assert.equal(result.status, 0, result.stderr);
 
-    const configPath = join(targetRoot, '.alloycat', 'agents', 'interaction-audit', 'index.json');
+    const configPath = join(targetRoot, '.alloycat', 'agents', 'interaction-auditor', 'index.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
-    assert.equal(config.agent_id, 'interaction-audit');
+    assert.equal(config.agent_id, 'interaction-auditor');
     assert.equal(config.mode, 'linked');
   } finally {
     rmSync(targetRoot, { recursive: true, force: true });
   }
 });
 
-test('packed alloycat package uninstalls from a target project through npx', () => {
+test('packed alloycat package uninstalls one agent from a target project through npx', () => {
   const tarball = packAlloycat();
   const targetRoot = mkdtempSync(join(tmpdir(), 'alloycat-packed-uninstall-target-'));
   try {
     const packageSpec = npxPackageSpec(tarball);
-    const install = run('npx', ['--yes', packageSpec, 'i', 'interaction-audit'], {
+    const install = run('npx', ['--yes', packageSpec, 'i', 'interaction-auditor'], {
       cwd: targetRoot
     });
     assert.equal(install.status, 0, install.stderr);
 
-    const result = run('npx', ['--yes', packageSpec, 'uninstall', 'interaction-audit'], {
+    const result = run('npx', ['--yes', packageSpec, 'uninstall', 'interaction-auditor'], {
       cwd: targetRoot
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Uninstalled agent: interaction-audit/);
+    assert.match(result.stdout, /Uninstalled agent: interaction-auditor/);
+    assert.match(result.stdout, /Gitignore: kept \.alloycat\//);
+    assert.equal(existsSync(join(targetRoot, '.alloycat')), true);
+    assert.equal(existsSync(join(targetRoot, '.alloycat', 'agents', 'interaction-auditor')), false);
+    assert.match(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
+  } finally {
+    rmSync(targetRoot, { recursive: true, force: true });
+  }
+});
+
+test('packed alloycat package uninstalls all project state through npx', () => {
+  const tarball = packAlloycat();
+  const targetRoot = mkdtempSync(join(tmpdir(), 'alloycat-packed-uninstall-all-target-'));
+  try {
+    const packageSpec = npxPackageSpec(tarball);
+    const install = run('npx', ['--yes', packageSpec, 'i', 'interaction-auditor'], {
+      cwd: targetRoot
+    });
+    assert.equal(install.status, 0, install.stderr);
+
+    const result = run('npx', ['--yes', packageSpec, 'uninstall'], {
+      cwd: targetRoot
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Uninstalled all alloycat project state/);
+    assert.match(result.stdout, /Gitignore: removed \.alloycat\//);
     assert.equal(existsSync(join(targetRoot, '.alloycat')), false);
     assert.doesNotMatch(readFileSync(join(targetRoot, '.gitignore'), 'utf8'), /^\.alloycat\/$/m);
   } finally {
@@ -228,7 +254,7 @@ test('packed alloycat package infers registry npx command prefix from lockfile',
       }
     }, null, 2)}\n`);
 
-    const result = spawnSync(process.execPath, [join(packageRoot, 'src', 'index.js'), 'install', 'interaction-audit'], {
+    const result = spawnSync(process.execPath, [join(packageRoot, 'src', 'index.js'), 'install', 'interaction-auditor'], {
       cwd: targetRoot,
       encoding: 'utf8',
       env: {
